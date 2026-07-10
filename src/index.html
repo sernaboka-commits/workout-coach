@@ -26,7 +26,7 @@
 
     <!-- Экран: Настройки / бэкап (чанк 6) -->
     <section class="screen" id="screen-settings">
-      <div class="placeholder">Бэкап (экспорт/импорт), мезоцикл, шаг веса — чанк 6.</div>
+      <div id="settings-root"></div>
     </section>
   </div>
 
@@ -38,7 +38,7 @@
     <button data-screen="settings"><span class="ico">⚙️</span>Настройки</button>
   </nav>
 
-  <!-- Порядок важен: библиотека → store → engine → ui -->
+  <!-- Порядок важен: библиотека → store → движок/аналитика → экраны → контроллер -->
   <script src="js/exercises.js"></script>
   <script src="js/store.js"></script>
   <script src="js/engine.js"></script>
@@ -46,39 +46,6 @@
   <script src="js/ui-workout.js"></script>
   <script src="js/ui-program.js"></script>
   <script src="js/ui-analytics.js"></script>
-
-  <!-- ВРЕМЕННЫЙ bootstrap (заменит app.js в чанке 6) -->
-  <script>
-    (function () {
-      // засеваем стартовую программу (день A), если пусто
-      var state = load(EXERCISE_LIBRARY);
-      var seeded = seedProgramIfEmpty(state);
-      if (seeded !== state) { save(seeded); state = seeded; }
-
-      initProgram(document.getElementById('program-root'), {});
-
-      function mountWorkout() {
-        initWorkout(document.getElementById('workout-root'), { state: load(EXERCISE_LIBRARY) });
-      }
-      function mountAnalytics() {
-        initAnalytics(document.getElementById('analytics-root'), { state: load(EXERCISE_LIBRARY) });
-      }
-      mountWorkout();
-
-      // временное переключение экранов (полноценный роутер — чанк 6)
-      var nav = document.getElementById('nav');
-      nav.addEventListener('click', function (e) {
-        var b = e.target.closest('button[data-screen]');
-        if (!b) return;
-        document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
-        document.getElementById('screen-' + b.dataset.screen).classList.add('active');
-        nav.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
-        b.classList.add('active');
-        // экраны перечитывают свежие данные при входе на вкладку
-        if (b.dataset.screen === 'workout') mountWorkout();
-        if (b.dataset.screen === 'analytics') mountAnalytics();
-      });
-    })();
-  </script>
+  <script src="js/app.js"></script>
 </body>
 </html>

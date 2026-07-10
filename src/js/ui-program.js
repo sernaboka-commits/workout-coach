@@ -56,11 +56,12 @@ function initProgram(root, opts = {}) {
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
 
+  const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib());
   let picker = null;   // { dayId } когда открыт выбор упражнения
   let query = '', muscle = null, customOpen = false;
 
-  function persist(next) { state = next; St.save(state); render(); }
+  function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
   function render() {
     const days = state.program.days;

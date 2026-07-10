@@ -254,3 +254,19 @@ html, body {
 .hist-edit { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
 .hist-edit .pi-params { margin-top: 8px; }
 .hist-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+/* ============================================================
+ * Экран настроек (мезоцикл + бэкап)
+ * ============================================================ */
+
+.meso-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.meso-badge { background: var(--surface-2); border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13px; }
+.meso-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.meso-hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+/* «нудж» на вкладке настроек, если бэкап просрочен */
+.nav button.nudge { position: relative; }
+.nav button.nudge::after {
+  content: ''; position: absolute; top: 10px; right: calc(50% - 16px);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--warn);
+}

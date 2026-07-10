@@ -1,0 +1,2201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1116">
+  <title>Тренер · силовые</title>
+  <style>
+/* ============================================================
+ * app.css — единая тёмная тема, mobile-first, крупные тач-элементы
+ * ============================================================ */
+
+:root {
+  --bg:        #0e1116;
+  --surface:   #171b22;
+  --surface-2: #1f242d;
+  --line:      #2b313b;
+  --text:      #e8ecf1;
+  --muted:     #94a0b0;
+  --accent:    #4c8dff;
+  --accent-2:  #2b6be0;
+  --ok:        #37c46a;
+  --warn:      #f0a336;
+  --cal:       #b07cff;
+  --danger:    #ff5d5d;
+  --tap:       56px;         /* минимальный размер тач-цели */
+  --radius:    14px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+/* --- каркас экранов --- */
+.app { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: 76px; }
+.screen { display: none; padding: 12px 12px 0; }
+.screen.active { display: block; }
+
+.placeholder {
+  margin-top: 40px; text-align: center; color: var(--muted);
+  padding: 24px; border: 1px dashed var(--line); border-radius: var(--radius);
+}
+
+/* --- нижняя навигация --- */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: flex; max-width: 560px; margin: 0 auto;
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+.nav button {
+  flex: 1; min-height: 64px; background: none; border: 0; color: var(--muted);
+  font-size: 12px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; cursor: pointer;
+}
+.nav button .ico { font-size: 20px; line-height: 1; }
+.nav button.active { color: var(--accent); }
+
+/* --- шапка тренировки --- */
+.wk-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 4px 14px;
+}
+.wk-title { font-weight: 700; font-size: 17px; }
+.wk-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.wk-prog {
+  font-weight: 700; font-size: 18px; color: var(--accent);
+  background: var(--surface-2); padding: 8px 14px; border-radius: 999px;
+}
+
+/* --- карточка упражнения --- */
+.ex-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.ex-card.complete { opacity: .7; }
+.ex-head { margin-bottom: 8px; }
+.ex-name { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.ex-meta { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+.badge.cal { background: rgba(176,124,255,.18); color: var(--cal); }
+.badge.ok  { background: rgba(55,196,106,.18); color: var(--ok); }
+
+.rec-line {
+  background: var(--surface-2); color: var(--muted);
+  font-size: 13px; padding: 8px 10px; border-radius: 10px; margin: 8px 0;
+  border-left: 3px solid var(--accent);
+}
+
+/* --- строка сета --- */
+.set-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.set-row.done {
+  background: var(--surface-2); border-radius: 10px; padding: 10px 12px;
+  font-size: 15px;
+}
+.set-row.done .set-no { color: var(--muted); width: 42px; font-size: 12px; }
+.set-row.done .set-res { flex: 1; font-weight: 600; }
+
+.set-row.active { justify-content: space-between; gap: 6px; }
+
+/* --- степпер --- */
+.stepper {
+  display: flex; align-items: center; background: var(--surface-2);
+  border-radius: 12px; overflow: hidden; flex: 1;
+}
+.stepper .step {
+  min-width: var(--tap); height: var(--tap); border: 0; cursor: pointer;
+  background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
+}
+.stepper .step:active { background: var(--line); }
+.stepper .val { flex: 1; text-align: center; padding: 4px 2px; }
+.stepper .val b { display: block; font-size: 19px; }
+.stepper .val small { color: var(--muted); font-size: 10.5px; }
+
+.log {
+  min-width: var(--tap); height: var(--tap); border: 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font-size: 24px; font-weight: 700; cursor: pointer;
+}
+.log:active { background: var(--accent-2); }
+
+.mini {
+  border: 0; background: transparent; color: var(--muted); font-size: 16px;
+  width: 32px; height: 32px; cursor: pointer; border-radius: 8px;
+}
+.mini:active { background: var(--line); color: var(--danger); }
+
+/* --- таймер отдыха --- */
+.rest-bar {
+  position: fixed; left: 0; right: 0; bottom: 76px; max-width: 560px; margin: 0 auto;
+  background: var(--surface-2); border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  overflow: hidden;
+}
+.rest-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; background: rgba(76,141,255,.18);
+  transition: width .25s linear; z-index: 0;
+}
+.rest-bar.over { background: rgba(55,196,106,.18); }
+.rest-bar.over .rest-fill { background: rgba(55,196,106,.28); }
+.rest-txt { flex: 1; font-weight: 700; z-index: 1; }
+.rest-add, .rest-skip {
+  z-index: 1; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 0;
+  background: var(--surface); color: var(--text); font-weight: 600; cursor: pointer;
+}
+.rest-skip { background: var(--accent); color: #fff; }
+
+/* ============================================================
+ * Экран программы (конструктор)
+ * ============================================================ */
+
+.prog-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 12px; }
+
+.btn {
+  border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+  font-weight: 600; padding: 10px 16px; min-height: 44px; cursor: pointer;
+}
+.btn.sm { padding: 8px 12px; min-height: 40px; font-size: 13px; }
+.btn.ghost { background: var(--surface-2); color: var(--text); }
+
+.day-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.day-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.day-label { font-weight: 700; font-size: 16px; }
+
+.pi-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+.prog-item {
+  background: var(--surface-2); border-radius: 10px; padding: 10px; margin-top: 8px;
+}
+.pi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pi-name { font-weight: 600; }
+.pi-ord { display: flex; gap: 2px; }
+
+.pi-params { display: flex; gap: 6px; flex-wrap: wrap; }
+.mstep {
+  display: flex; align-items: center; background: var(--surface);
+  border-radius: 10px; overflow: hidden; flex: 1; min-width: 92px;
+}
+.ms-btn {
+  min-width: 40px; height: 48px; border: 0; background: transparent;
+  color: var(--text); font-size: 22px; cursor: pointer;
+}
+.ms-btn:active { background: var(--line); }
+.ms-val { flex: 1; text-align: center; }
+.ms-val b { display: block; font-size: 16px; }
+.ms-val small { color: var(--muted); font-size: 9.5px; }
+
+/* --- оверлей выбора упражнения --- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 20;
+}
+.sheet {
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  border: 1px solid var(--line); padding: 14px;
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+.in {
+  width: 100%; box-sizing: border-box; margin-bottom: 10px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 12px; font-size: 15px;
+}
+.in.short { width: 100px; margin-bottom: 0; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  border-radius: 999px; padding: 8px 12px; font-size: 13px; cursor: pointer; min-height: 40px;
+}
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.lib-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.lib-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left; border: 0; background: var(--surface-2); color: var(--text);
+  border-radius: 10px; padding: 12px; cursor: pointer; min-height: 52px;
+}
+.lib-row small { color: var(--muted); }
+.lib-row:active { background: var(--line); }
+
+.custom-form { border-top: 1px solid var(--line); padding-top: 12px; }
+.custom-form .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cx-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }
+
+/* ============================================================
+ * Экран аналитики
+ * ============================================================ */
+
+.an-screen .wk-title { padding: 6px 4px 12px; }
+.an-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.an-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+.an-head small { color: var(--muted); font-size: 12px; }
+.chart { width: 100%; height: 160px; display: block; }
+
+.sel {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 10px; font-size: 14px; max-width: 60%;
+}
+
+.stag { background: var(--surface-2); border-left: 3px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.stag-name { font-weight: 700; }
+.stag-hint { color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+.hist-ses { margin-bottom: 12px; }
+.hist-date { color: var(--muted); font-size: 12px; margin: 4px 2px 6px; }
+.hist-row { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.hist-ex { flex: 1; font-weight: 600; }
+.hist-val { color: var(--muted); }
+
+.hist-edit { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.hist-edit .pi-params { margin-top: 8px; }
+.hist-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+/* ============================================================
+ * Экран настроек (мезоцикл + бэкап)
+ * ============================================================ */
+
+.meso-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.meso-badge { background: var(--surface-2); border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13px; }
+.meso-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.meso-hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+/* «нудж» на вкладке настроек, если бэкап просрочен */
+.nav button.nudge { position: relative; }
+.nav button.nudge::after {
+  content: ''; position: absolute; top: 10px; right: calc(50% - 16px);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--warn);
+}
+
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Экран: Тренировка (чанк 3) -->
+    <section class="screen active" id="screen-workout">
+      <div id="workout-root"></div>
+    </section>
+
+    <!-- Экран: Программа (чанк 4) -->
+    <section class="screen" id="screen-program">
+      <div id="program-root"></div>
+    </section>
+
+    <!-- Экран: Аналитика (чанк 5) -->
+    <section class="screen" id="screen-analytics">
+      <div id="analytics-root"></div>
+    </section>
+
+    <!-- Экран: Настройки / бэкап (чанк 6) -->
+    <section class="screen" id="screen-settings">
+      <div id="settings-root"></div>
+    </section>
+  </div>
+
+  <!-- Нижняя навигация (полноценный роутер — app.js, чанк 6) -->
+  <nav class="nav" id="nav">
+    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Трен.</button>
+    <button data-screen="program"><span class="ico">🗂️</span>Программа</button>
+    <button data-screen="analytics"><span class="ico">📈</span>Аналитика</button>
+    <button data-screen="settings"><span class="ico">⚙️</span>Настройки</button>
+  </nav>
+
+  <!-- Порядок важен: библиотека → store → движок/аналитика → экраны → контроллер -->
+  <script>
+/* ============================================================
+ * exercises.js — встроенная библиотека упражнений
+ * Контракт: EXERCISE_LIBRARY: Exercise[]
+ * Exercise: { id, name, primaryMuscle, secondaryMuscles, kind, weightStep }
+ * primaryMuscle: chest|back|legs|shoulders|arms|core
+ * kind: compound|isolation
+ * weightStep: минимальный шаг изменения веса, кг
+ * ============================================================ */
+
+const MUSCLE_LABELS = {
+  chest: 'Грудь', back: 'Спина', legs: 'Ноги',
+  shoulders: 'Плечи', arms: 'Руки', core: 'Кор',
+};
+
+const EXERCISE_LIBRARY = [
+  // ---- Грудь ----
+  { id: 'bb-bench-press',      name: 'Жим штанги лёжа',                primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2.5 },
+  { id: 'db-bench-press',      name: 'Жим гантелей лёжа',              primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2 },
+  { id: 'incline-bb-press',    name: 'Жим штанги на наклонной',        primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2.5 },
+  { id: 'incline-db-press',    name: 'Жим гантелей на наклонной',      primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2 },
+  { id: 'machine-chest-press', name: 'Жим в тренажёре на грудь',       primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 5 },
+  { id: 'dips',                name: 'Отжимания на брусьях',           primaryMuscle: 'chest', secondaryMuscles: ['arms', 'shoulders'], kind: 'compound',  weightStep: 2.5 },
+  { id: 'cable-fly',           name: 'Сведение в кроссовере',          primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'db-fly',              name: 'Разводка гантелей лёжа',         primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 2 },
+  { id: 'pec-deck',            name: 'Бабочка (пек-дек)',              primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+
+  // ---- Спина ----
+  { id: 'db-shrug',            name: 'Шраги с гантелями',              primaryMuscle: 'back',  secondaryMuscles: ['shoulders'],         kind: 'isolation', weightStep: 2 },
+  { id: 'deadlift',            name: 'Становая тяга',                  primaryMuscle: 'back',  secondaryMuscles: ['legs', 'core'],      kind: 'compound',  weightStep: 2.5 },
+  { id: 'pull-up',             name: 'Подтягивания',                   primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2.5 },
+  { id: 'lat-pulldown',        name: 'Тяга верхнего блока',            primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 5 },
+  { id: 'bb-row',              name: 'Тяга штанги в наклоне',          primaryMuscle: 'back',  secondaryMuscles: ['arms', 'core'],      kind: 'compound',  weightStep: 2.5 },
+  { id: 'db-row',              name: 'Тяга гантели в наклоне',         primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2 },
+  { id: 'seated-cable-row',    name: 'Тяга горизонтального блока',     primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 5 },
+  { id: 't-bar-row',           name: 'Тяга Т-грифа',                   primaryMuscle: 'back',  secondaryMuscles: ['arms', 'core'],      kind: 'compound',  weightStep: 2.5 },
+  { id: 'straight-arm-pd',     name: 'Пуловер на блоке',               primaryMuscle: 'back',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'hyperextension',      name: 'Гиперэкстензия',                 primaryMuscle: 'back',  secondaryMuscles: ['legs', 'core'],      kind: 'isolation', weightStep: 2.5 },
+
+  // ---- Ноги ----
+  { id: 'bb-squat',            name: 'Приседания со штангой',          primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'compound',  weightStep: 2.5 },
+  { id: 'front-squat',         name: 'Фронтальные приседания',         primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'compound',  weightStep: 2.5 },
+  { id: 'leg-press',           name: 'Жим ногами',                     primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'compound',  weightStep: 5 },
+  { id: 'romanian-dl',         name: 'Румынская тяга',                 primaryMuscle: 'legs',  secondaryMuscles: ['back', 'core'],      kind: 'compound',  weightStep: 2.5 },
+  { id: 'bulgarian-split',     name: 'Болгарские выпады',              primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'compound',  weightStep: 2 },
+  { id: 'walking-lunge',       name: 'Выпады с гантелями',             primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'compound',  weightStep: 2 },
+  { id: 'leg-extension',       name: 'Разгибание ног в тренажёре',     primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'leg-curl',            name: 'Сгибание ног в тренажёре',       primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'calf-raise',          name: 'Подъёмы на носки стоя',          primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'hip-thrust',          name: 'Ягодичный мост со штангой',      primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'compound',  weightStep: 5 },
+
+  // ---- Плечи ----
+  { id: 'ohp',                 name: 'Жим штанги стоя (армейский)',    primaryMuscle: 'shoulders', secondaryMuscles: ['arms', 'core'],  kind: 'compound',  weightStep: 2.5 },
+  { id: 'db-shoulder-press',   name: 'Жим гантелей сидя',              primaryMuscle: 'shoulders', secondaryMuscles: ['arms'],          kind: 'compound',  weightStep: 2 },
+  { id: 'lateral-raise',       name: 'Махи гантелями в стороны',       primaryMuscle: 'shoulders', secondaryMuscles: [],                 kind: 'isolation', weightStep: 1 },
+  { id: 'cable-lateral',       name: 'Отведение в кроссовере',         primaryMuscle: 'shoulders', secondaryMuscles: [],                 kind: 'isolation', weightStep: 2.5 },
+  { id: 'rear-delt-fly',       name: 'Разведения на заднюю дельту',    primaryMuscle: 'shoulders', secondaryMuscles: ['back'],          kind: 'isolation', weightStep: 1 },
+  { id: 'face-pull',           name: 'Тяга к лицу (фейс-пулл)',        primaryMuscle: 'shoulders', secondaryMuscles: ['back'],          kind: 'isolation', weightStep: 2.5 },
+  { id: 'upright-row',         name: 'Тяга штанги к подбородку',       primaryMuscle: 'shoulders', secondaryMuscles: ['arms'],          kind: 'compound',  weightStep: 2.5 },
+
+  // ---- Руки ----
+  { id: 'bb-curl',             name: 'Подъём штанги на бицепс',        primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'db-curl',             name: 'Подъём гантелей на бицепс',      primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
+  { id: 'hammer-curl',         name: 'Молотки',                        primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
+  { id: 'preacher-curl',       name: 'Бицепс на скамье Скотта',        primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'cable-pushdown',      name: 'Разгибание на блоке (трицепс)',  primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'overhead-ext',        name: 'Французский жим из-за головы',   primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'skull-crusher',       name: 'Французский жим лёжа',           primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'close-grip-bench',    name: 'Жим узким хватом',               primaryMuscle: 'arms',  secondaryMuscles: ['chest', 'shoulders'], kind: 'compound', weightStep: 2.5 },
+
+  // ---- Кор ----
+  { id: 'plank',               name: 'Планка (с отягощением)',         primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'cable-crunch',        name: 'Скручивания на блоке',           primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+  { id: 'hanging-leg-raise',   name: 'Подъём ног в висе',              primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
+  { id: 'ab-wheel',            name: 'Ролик для пресса',               primaryMuscle: 'core',  secondaryMuscles: ['shoulders'],         kind: 'compound',  weightStep: 1 },
+  { id: 'russian-twist',       name: 'Русские скручивания',            primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
+  { id: 'farmer-walk',         name: 'Прогулка фермера',               primaryMuscle: 'core',  secondaryMuscles: ['back', 'arms'],      kind: 'compound',  weightStep: 2 },
+];
+
+function getExercise(state, id) {
+  return state.exercises.find((e) => e.id === id) || null;
+}
+
+function searchExercises(state, { query = '', muscle = null } = {}) {
+  const q = query.trim().toLowerCase();
+  return state.exercises.filter((e) => {
+    if (muscle && e.primaryMuscle !== muscle) return false;
+    if (q && !e.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+/* export для node-тестов; в браузере — глобальные объявления */
+if (typeof module !== 'undefined') {
+  module.exports = { EXERCISE_LIBRARY, MUSCLE_LABELS, getExercise, searchExercises };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * store.js — слой хранения (единственная точка чтения/записи)
+ * Контракт (аналоги endpoints):
+ *   load()                        GET  /state
+ *   save(state)                   PUT  /state
+ *   exportBackup(state)           GET  /backup   -> {filename, json}
+ *   importBackup(json)            POST /backup   -> state | throws
+ *   startSession(state, dayId)    POST /sessions
+ *   logSet(state, sessionId, s)   POST /sessions/:id/sets
+ *   updateSet(state, setId, p)    PATCH /sets/:id
+ *   deleteSet(state, setId)       DELETE /sets/:id
+ * Все мутирующие функции: принимают state, возвращают новый state,
+ * вызывающий обязан затем сделать save(). UI в state напрямую не пишет.
+ * ============================================================ */
+
+const STORAGE_KEY = 'workoutCoach.v1';
+const SCHEMA_VERSION = 1;
+
+/* ---------- дефолтное состояние ---------- */
+
+function defaultState(exerciseLibrary) {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    settings: {
+      weightStepDefault: 2.5,
+      backupReminderDays: 14,
+      lastBackupAt: null,
+    },
+    exercises: exerciseLibrary.map((e) => ({ ...e, isCustom: false })),
+    program: { days: [] },          // конструктор заполнит A/B/C
+    sessions: [],
+    mesocycle: {
+      cycleNo: 1,
+      weekNo: 1,                    // 1..6 (6 = делоуд при growWeeks=5)
+      growWeeks: 5,
+      startedAt: new Date().toISOString(),
+      deloadShift: 0,               // ручной сдвиг делоуда ±1 (риск из PRD)
+    },
+  };
+}
+
+/* ---------- миграции ---------- */
+
+const MIGRATIONS = {
+  // 1 -> 2: (пример на будущее) (s) => { ...s, schemaVersion: 2 }
+};
+
+function migrate(state) {
+  let s = state;
+  while (s.schemaVersion < SCHEMA_VERSION) {
+    const fn = MIGRATIONS[s.schemaVersion];
+    if (!fn) throw new Error(`Нет миграции со схемы v${s.schemaVersion}`);
+    s = fn(s);
+  }
+  return s;
+}
+
+/* ---------- load / save ---------- */
+
+function load(exerciseLibrary) {
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch (_) { /* private mode */ }
+  if (!raw) return defaultState(exerciseLibrary);
+  try {
+    const parsed = JSON.parse(raw);
+    validateState(parsed);
+    return migrate(parsed);
+  } catch (err) {
+    // повреждённое состояние не затираем молча: сохраняем аварийную копию
+    try { localStorage.setItem(STORAGE_KEY + '.corrupt', raw); } catch (_) {}
+    console.error('Состояние повреждено, старт с чистого. Копия: .corrupt', err);
+    return defaultState(exerciseLibrary);
+  }
+}
+
+function save(state) {
+  validateState(state);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  return state;
+}
+
+/* ---------- валидация (минимальная, структурная) ---------- */
+
+function validateState(s) {
+  const fail = (m) => { throw new Error('Invalid state: ' + m); };
+  if (!s || typeof s !== 'object') fail('not an object');
+  if (typeof s.schemaVersion !== 'number') fail('schemaVersion');
+  if (!Array.isArray(s.exercises)) fail('exercises');
+  if (!s.program || !Array.isArray(s.program.days)) fail('program.days');
+  if (!Array.isArray(s.sessions)) fail('sessions');
+  if (!s.mesocycle || typeof s.mesocycle.weekNo !== 'number') fail('mesocycle');
+  return true;
+}
+
+/* ---------- бэкап ---------- */
+
+function exportBackup(state) {
+  const stamped = {
+    ...state,
+    settings: { ...state.settings, lastBackupAt: new Date().toISOString() },
+  };
+  const date = new Date().toISOString().slice(0, 10);
+  return {
+    state: stamped,                                   // сохранить после скачивания
+    filename: `workout-backup-${date}.json`,
+    json: JSON.stringify(stamped, null, 2),
+  };
+}
+
+function importBackup(jsonString) {
+  const parsed = JSON.parse(jsonString);              // throws при мусоре
+  validateState(parsed);
+  return migrate(parsed);
+}
+
+function backupOverdue(state, now = new Date()) {
+  const { lastBackupAt, backupReminderDays } = state.settings;
+  if (!lastBackupAt) return state.sessions.length >= 3;   // напоминаем после 3 тренировок
+  const ageDays = (now - new Date(lastBackupAt)) / 86400000;
+  return ageDays >= backupReminderDays;
+}
+
+/* ---------- id ---------- */
+
+function genId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/* ---------- сессии и подходы ---------- */
+
+function startSession(state, dayId, { date = new Date().toISOString(), isDeload = false } = {}) {
+  const session = {
+    id: genId('ses'),
+    date,
+    dayId,
+    weekNo: state.mesocycle.weekNo,
+    isDeload,
+    sets: [],
+    note: null,
+  };
+  return { state: { ...state, sessions: [...state.sessions, session] }, session };
+}
+
+function logSet(state, sessionId, setInput) {
+  const set = {
+    id: genId('set'),
+    exerciseId: setInput.exerciseId,
+    setNo: setInput.setNo,
+    weight: Number(setInput.weight),
+    reps: Number(setInput.reps),
+    rir: setInput.rir == null ? null : Number(setInput.rir),
+    isCalibration: !!setInput.isCalibration,
+    analysis: null,                 // задел v2: видеоанализ
+    mediaRef: null,                 // задел v2
+  };
+  if (!(set.weight >= 0) || !(set.reps > 0)) throw new Error('Некорректные вес/повторы');
+  const sessions = state.sessions.map((s) =>
+    s.id === sessionId ? { ...s, sets: [...s.sets, set] } : s
+  );
+  if (!sessions.some((s) => s.id === sessionId)) throw new Error('Сессия не найдена: ' + sessionId);
+  return { state: { ...state, sessions }, set };
+}
+
+function updateSet(state, setId, patch) {
+  let found = false;
+  const allowed = ['weight', 'reps', 'rir', 'isCalibration'];
+  const sessions = state.sessions.map((s) => ({
+    ...s,
+    sets: s.sets.map((st) => {
+      if (st.id !== setId) return st;
+      found = true;
+      const clean = Object.fromEntries(
+        Object.entries(patch).filter(([k]) => allowed.includes(k))
+      );
+      return { ...st, ...clean };
+    }),
+  }));
+  if (!found) throw new Error('Подход не найден: ' + setId);
+  return { ...state, sessions };
+}
+
+function deleteSet(state, setId) {
+  const sessions = state.sessions.map((s) => ({
+    ...s,
+    sets: s.sets.filter((st) => st.id !== setId),
+  }));
+  return { ...state, sessions };
+}
+
+/* ---------- выборки истории (для engine и UI) ---------- */
+
+/** Все подходы упражнения, сгруппированные по сессиям, новые первыми */
+function exerciseHistory(state, exerciseId, { includeCalibration = false, limit = 10 } = {}) {
+  const out = [];
+  const sessions = [...state.sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  for (const ses of sessions) {
+    const sets = ses.sets.filter(
+      (st) => st.exerciseId === exerciseId && (includeCalibration || !st.isCalibration)
+    );
+    if (sets.length) out.push({ sessionId: ses.id, date: ses.date, isDeload: ses.isDeload, weekNo: ses.weekNo, sets });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/* ---------- программа: дни A/B/C и их упражнения ----------
+ * Тот же контракт, что у сессий: принимают state, возвращают новый
+ * (addDay/addCustomExercise возвращают { state, day|exercise }).
+ * DayTemplate = { id, label, items: [DayItem] }
+ * DayItem = { exerciseId, repRangeMin, repRangeMax, workSets, targetRIR, restSec }
+ */
+
+function nextDayLabel(days) {
+  const used = new Set(days.map((d) => d.label));
+  for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(c)) return c;
+  return 'День ' + (days.length + 1);
+}
+
+function normalizeItem(item) {
+  const it = {
+    exerciseId: item.exerciseId,
+    repRangeMin: Number(item.repRangeMin),
+    repRangeMax: Number(item.repRangeMax),
+    workSets: Number(item.workSets),
+    targetRIR: item.targetRIR == null ? 2 : Number(item.targetRIR),
+    restSec: Number(item.restSec),
+  };
+  if (!it.exerciseId) throw new Error('Нужен exerciseId');
+  if (!(it.workSets > 0)) throw new Error('workSets должно быть > 0');
+  if (!(it.repRangeMin > 0) || !(it.repRangeMax >= it.repRangeMin)) throw new Error('Некорректный диапазон повторов');
+  return it;
+}
+
+function mapDay(state, dayId, fn) {
+  let found = false;
+  const days = state.program.days.map((d) => {
+    if (d.id !== dayId) return d;
+    found = true;
+    return fn(d);
+  });
+  if (!found) throw new Error('День не найден: ' + dayId);
+  return { ...state, program: { ...state.program, days } };
+}
+
+function addDay(state, { label } = {}) {
+  const day = { id: genId('day'), label: label || nextDayLabel(state.program.days), items: [] };
+  return { state: { ...state, program: { ...state.program, days: [...state.program.days, day] } }, day };
+}
+
+function deleteDay(state, dayId) {
+  return { ...state, program: { ...state.program, days: state.program.days.filter((d) => d.id !== dayId) } };
+}
+
+function addDayItem(state, dayId, item) {
+  const it = normalizeItem(item);
+  return mapDay(state, dayId, (d) => ({ ...d, items: [...d.items, it] }));
+}
+
+function updateDayItem(state, dayId, index, patch) {
+  const allowed = ['exerciseId', 'repRangeMin', 'repRangeMax', 'workSets', 'targetRIR', 'restSec'];
+  const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
+  return mapDay(state, dayId, (d) => {
+    if (index < 0 || index >= d.items.length) throw new Error('Нет элемента #' + index);
+    return { ...d, items: d.items.map((it, i) => (i === index ? { ...it, ...clean } : it)) };
+  });
+}
+
+function removeDayItem(state, dayId, index) {
+  return mapDay(state, dayId, (d) => ({ ...d, items: d.items.filter((_, i) => i !== index) }));
+}
+
+function moveDayItem(state, dayId, index, dir) {
+  return mapDay(state, dayId, (d) => {
+    const items = d.items.slice();
+    const j = index + dir;
+    if (j < 0 || j >= items.length) return d;
+    [items[index], items[j]] = [items[j], items[index]];
+    return { ...d, items };
+  });
+}
+
+/* ---------- пользовательские упражнения ---------- */
+
+function addCustomExercise(state, ex) {
+  if (!ex || !ex.name || !ex.name.trim()) throw new Error('Нужно название упражнения');
+  const exercise = {
+    id: genId('cx'),
+    name: ex.name.trim(),
+    primaryMuscle: ex.primaryMuscle || 'chest',
+    secondaryMuscles: Array.isArray(ex.secondaryMuscles) ? ex.secondaryMuscles : [],
+    kind: ex.kind === 'compound' ? 'compound' : 'isolation',
+    weightStep: Number(ex.weightStep) || state.settings.weightStepDefault,
+    isCustom: true,
+  };
+  return { state: { ...state, exercises: [...state.exercises, exercise] }, exercise };
+}
+
+function deleteCustomExercise(state, id) {
+  const ex = state.exercises.find((e) => e.id === id);
+  if (!ex) throw new Error('Упражнение не найдено');
+  if (!ex.isCustom) throw new Error('Встроенные упражнения удалять нельзя');
+  return { ...state, exercises: state.exercises.filter((e) => e.id !== id) };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    STORAGE_KEY, SCHEMA_VERSION,
+    defaultState, load, save, validateState,
+    exportBackup, importBackup, backupOverdue,
+    startSession, logSet, updateSet, deleteSet,
+    exerciseHistory, genId,
+    nextDayLabel, addDay, deleteDay,
+    addDayItem, updateDayItem, removeDayItem, moveDayItem,
+    addCustomExercise, deleteCustomExercise,
+  };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * engine.js — движок прогрессии (чистые функции, без DOM)
+ * Контракт (аналоги endpoints):
+ *   recommend(exerciseId, setNo, ctx)  GET  /recommendation
+ *   calibrate(probeSet, ctx)           POST /calibration
+ *   mesoStatus(state)                  GET  /mesocycle
+ *   advanceWeek(state, opts)           POST /mesocycle/advance
+ *   shiftDeload(state, delta)          POST /mesocycle/shift
+ *   context(state, exerciseId, item)   helper: собирает ctx из state
+ *
+ * ctx для recommend: { meso, item, exercise, history }
+ *   meso     — результат mesoStatus(state)
+ *   item     — элемент DayTemplate: { repRangeMin, repRangeMax, workSets, targetRIR, restSec }
+ *   exercise — { weightStep, ... } из библиотеки
+ *   history  — store.exerciseHistory(...) (новые первыми, без калибровок)
+ *
+ * Все функции чистые: не пишут в store, не трогают DOM. Мутирующие
+ * (advanceWeek/shiftDeload) принимают state и возвращают новый state.
+ *
+ * Параметры движка зафиксированы в CLAUDE.md:
+ *   - RIR-рампа: нед.1→3, нед.2–3→2, нед.4–5→1, делоуд→4
+ *   - Перегруз: RIR 0 в 2+ сетах → удержание; повторно → −5%
+ *   - Делоуд: 60% рабочего веса, 50% сетов
+ *   - Прогрессия: все сеты у потолка повторов → +1 шаг веса, возврат к низу
+ *   - Калибровка: разведочный подход → проекция по Эпли → контрольный подход
+ * ============================================================ */
+
+/* ---------- утилиты ---------- */
+
+/** Округление веса к сетке шага (nearest | floor | ceil). */
+function roundToStep(weight, step, mode = 'nearest') {
+  if (!step || step <= 0) return weight;
+  const n = weight / step;
+  const r = mode === 'floor' ? Math.floor(n) : mode === 'ceil' ? Math.ceil(n) : Math.round(n);
+  return +(r * step).toFixed(3);
+}
+
+/** Оценка 1ПМ по Эпли из подхода до отказа (reps = повторы до отказа). */
+function epley1rm(weight, repsToFailure) {
+  return weight * (1 + repsToFailure / 30);
+}
+
+/** Целевой RIR недели роста (без делоуда). Рампа масштабируется под growWeeks. */
+function targetRIRForWeek(weekNo, growWeeks) {
+  // нед.1 → RIR 3; следующая треть → RIR 2; последние две пятых → RIR 1
+  if (weekNo <= Math.ceil(growWeeks * 0.2)) return 3;   // gw=5: нед.1
+  if (weekNo <= Math.ceil(growWeeks * 0.6)) return 2;   // gw=5: нед.2–3
+  return 1;                                             // gw=5: нед.4–5
+}
+
+/** Краткое текстовое описание результатов сессии для UI/причины. */
+function summarize(sets) {
+  return {
+    sets: sets.map((s) => ({ weight: s.weight, reps: s.reps, rir: s.rir })),
+    text: sets
+      .map((s) => `${s.weight}×${s.reps}${s.rir != null ? ' RIR' + s.rir : ''}`)
+      .join(', '),
+  };
+}
+
+/* ---------- мезоцикл ---------- */
+
+function mesoStatus(state) {
+  const m = state.mesocycle;
+  const growWeeks = m.growWeeks || 5;
+  const deloadShift = m.deloadShift || 0;
+  const deloadWeek = growWeeks + 1 + deloadShift;
+  const isDeload = m.weekNo >= deloadWeek;
+  const targetRIR = isDeload ? 4 : targetRIRForWeek(m.weekNo, growWeeks);
+  return { cycleNo: m.cycleNo, weekNo: m.weekNo, growWeeks, deloadShift, deloadWeek, isDeload, targetRIR };
+}
+
+/** Переход на следующую неделю; после делоуда — новый цикл (weekNo=1). */
+function advanceWeek(state, { now = new Date() } = {}) {
+  const m = state.mesocycle;
+  const growWeeks = m.growWeeks || 5;
+  const deloadWeek = growWeeks + 1 + (m.deloadShift || 0);
+  if (m.weekNo >= deloadWeek) {
+    return {
+      ...state,
+      mesocycle: { ...m, cycleNo: m.cycleNo + 1, weekNo: 1, deloadShift: 0, startedAt: now.toISOString() },
+    };
+  }
+  return { ...state, mesocycle: { ...m, weekNo: m.weekNo + 1 } };
+}
+
+/** Ручной сдвиг делоуда ±1 неделя (риск из PRD). Клампится к [-1, +1]. */
+function shiftDeload(state, delta) {
+  const cur = state.mesocycle.deloadShift || 0;
+  const next = Math.max(-1, Math.min(1, cur + delta));
+  return { ...state, mesocycle: { ...state.mesocycle, deloadShift: next } };
+}
+
+/* ---------- сбор контекста из state ---------- */
+
+/**
+ * Собирает ctx для recommend из полного state.
+ * exerciseHistory — функция store.exerciseHistory (инъекция, чтобы не тянуть store).
+ */
+function context(state, exerciseId, item, exerciseHistoryFn) {
+  const meso = mesoStatus(state);
+  const exercise = state.exercises.find((e) => e.id === exerciseId) || { weightStep: state.settings.weightStepDefault };
+  const history = exerciseHistoryFn
+    ? exerciseHistoryFn(state, exerciseId, { includeCalibration: false, limit: 10 })
+    : [];
+  return { meso, item, exercise, history };
+}
+
+/* ---------- калибровка нового упражнения ---------- */
+
+/**
+ * Проекция рабочего веса из разведочного подхода по Эпли.
+ * probeSet: { weight, reps, rir } — не до отказа (reps до отказа = reps + rir).
+ * ctx: { targetReps, targetRIR, weightStep }
+ * → { weight, e1rm, confidence, targetReps, targetRIR, reason }
+ */
+function calibrate(probeSet, ctx) {
+  const targetReps = ctx.targetReps;
+  const targetRIR = ctx.targetRIR == null ? 2 : ctx.targetRIR;
+  const step = ctx.weightStep || 2.5;
+
+  const probeEff = Number(probeSet.reps) + Number(probeSet.rir == null ? 0 : probeSet.rir);
+  const e1rm = epley1rm(Number(probeSet.weight), probeEff);
+  const targetEff = targetReps + targetRIR;
+  const raw = e1rm / (1 + targetEff / 30);
+  const weight = roundToStep(raw, step);
+
+  // уверенность падает с ростом дистанции экстраполяции и вне окна 10–15 повторов
+  let confidence = 0.9 - Math.abs(probeEff - targetEff) * 0.03;
+  if (probeSet.reps < 8 || probeSet.reps > 18) confidence -= 0.2;
+  confidence = Math.max(0.3, Math.min(0.95, confidence));
+
+  return {
+    weight,
+    e1rm: +e1rm.toFixed(1),
+    confidence: +confidence.toFixed(2),
+    targetReps,
+    targetRIR,
+    reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}. Подтверди контрольным подходом.`,
+  };
+}
+
+/* ---------- рекомендация на подход ---------- */
+
+/**
+ * Рекомендация веса/повторов/RIR на следующий подход.
+ * → { weight, reps, targetRIR, reason, isDeload, needsCalibration, lastResult }
+ * weight === null при needsCalibration (истории нет).
+ */
+function recommend(exerciseId, setNo, ctx) {
+  const { meso, item, exercise } = ctx;
+  const step = exercise.weightStep || 2.5;
+  const targetRIR = meso.targetRIR;
+
+  // сессии с рабочими (не калибровочными) сетами, без делоуда, новые первыми
+  const history = (ctx.history || []).filter(
+    (h) => !h.isDeload && h.sets.some((s) => !s.isCalibration)
+  );
+
+  // нет истории → режим калибровки
+  if (history.length === 0) {
+    return {
+      weight: null,
+      reps: item.repRangeMin,
+      targetRIR,
+      isDeload: meso.isDeload,
+      needsCalibration: true,
+      lastResult: null,
+      reason: 'Нет истории по упражнению — нужна калибровка (разведочный подход).',
+    };
+  }
+
+  const last = history[0];
+  const lastWork = last.sets.filter((s) => !s.isCalibration);
+  const workWeight = Math.max(...lastWork.map((s) => s.weight));
+  const lastResult = summarize(lastWork);
+
+  // делоуд: 60% рабочего веса, низ диапазона; число сетов (50%) решает UI
+  if (meso.isDeload) {
+    const w = roundToStep(workWeight * 0.6, step);
+    return {
+      weight: w,
+      reps: item.repRangeMin,
+      targetRIR,
+      isDeload: true,
+      needsCalibration: false,
+      lastResult,
+      reason: `Делоуд: 60% рабочего веса (${workWeight}→${w} кг), половина сетов, RIR ${targetRIR}.`,
+    };
+  }
+
+  // перегруз: RIR 0 в 2+ рабочих сетах сессии
+  const overreach = (sess) =>
+    !!sess && sess.sets.filter((s) => !s.isCalibration && s.rir === 0).length >= 2;
+  const lastOver = overreach(last);
+  const prevOver = overreach(history[1]);
+
+  // повторный перегруз (две сессии подряд) → −5%
+  if (lastOver && prevOver) {
+    const w = roundToStep(workWeight * 0.95, step); // nearest: ближе к целевым −5%, чем floor
+    return {
+      weight: w,
+      reps: item.repRangeMin,
+      targetRIR,
+      isDeload: false,
+      needsCalibration: false,
+      lastResult,
+      reason: `Повторный перегруз (RIR 0) — снижаем 5% (${workWeight}→${w} кг).`,
+    };
+  }
+
+  // одиночный перегруз → удержание веса
+  if (lastOver) {
+    return {
+      weight: workWeight,
+      reps: item.repRangeMax,
+      targetRIR,
+      isDeload: false,
+      needsCalibration: false,
+      lastResult,
+      reason: 'Фактическое усилие выше целевого (RIR 0) — закрепляем вес.',
+    };
+  }
+
+  // двойная прогрессия: все рабочие сеты у потолка повторов → +шаг веса, возврат к низу
+  const allCeiling = lastWork.length > 0 && lastWork.every((s) => s.reps >= item.repRangeMax);
+  if (allCeiling) {
+    const w = roundToStep(workWeight + step, step);
+    return {
+      weight: w,
+      reps: item.repRangeMin,
+      targetRIR,
+      isDeload: false,
+      needsCalibration: false,
+      lastResult,
+      reason: `Все сеты у потолка (${item.repRangeMax}) — +${step} кг, возврат к ${item.repRangeMin} повт.`,
+    };
+  }
+
+  // иначе — тот же вес, добавляем повторы (цель — потолок диапазона)
+  const maxReps = Math.max(...lastWork.map((s) => s.reps));
+  const targetReps = Math.min(Math.max(maxReps + 1, item.repRangeMin), item.repRangeMax);
+  return {
+    weight: workWeight,
+    reps: targetReps,
+    targetRIR,
+    isDeload: false,
+    needsCalibration: false,
+    lastResult,
+    reason: `Двойная прогрессия — тот же вес, цель +повторы (до ${item.repRangeMax}).`,
+  };
+}
+
+/* export для node-тестов; в браузере — глобальные объявления */
+if (typeof module !== 'undefined') {
+  module.exports = {
+    roundToStep,
+    epley1rm,
+    targetRIRForWeek,
+    mesoStatus,
+    advanceWeek,
+    shiftDeload,
+    context,
+    calibrate,
+    recommend,
+  };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * analytics.js — аналитика (чистые функции без DOM)
+ * Контракт (аналоги endpoints):
+ *   e1rmSeries(state, exerciseId, opts)   GET /analytics/e1rm
+ *   weeklyVolume(state, opts)             GET /analytics/volume
+ *   stagnation(state, opts)               GET /analytics/stagnation
+ *
+ * Единообразие e1RM (подтверждено пользователем): одна формула Эпли из
+ * engine.js; RIR всегда приводится к повторам до отказа (reps + rir).
+ * ============================================================ */
+
+/* engine в node — через require; в браузере epley1rm — глобаль */
+var _ANALYTICS_ENGINE = (typeof module !== 'undefined') ? require('./engine.js') : null;
+
+/** Единая точка расчёта e1RM: вес × повторы-до-отказа по Эпли. */
+function e1rm(weight, reps, rir) {
+  const rtf = Number(reps) + (rir == null ? 0 : Number(rir));
+  const fn = _ANALYTICS_ENGINE ? _ANALYTICS_ENGINE.epley1rm : epley1rm;
+  return fn(Number(weight), rtf);
+}
+
+const MUSCLE_ORDER = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+const VOLUME_CORRIDOR = [10, 20];
+
+/* ---------- недели (UTC, детерминизм независимо от tz) ---------- */
+
+function startOfWeek(d) {
+  const x = new Date(d);
+  const day = (x.getUTCDay() + 6) % 7;       // Пн = 0
+  x.setUTCHours(0, 0, 0, 0);
+  x.setUTCDate(x.getUTCDate() - day);
+  return x;
+}
+function weekKey(d) {
+  return startOfWeek(d).toISOString().slice(0, 10);
+}
+
+/* ---------- e1RM: ряд «сессия → лучший e1RM» ---------- */
+
+/** Лучший e1RM среди набора сетов (по одному упражнению). */
+function bestE1rm(sets) {
+  let best = 0;
+  for (const s of sets) {
+    const v = e1rm(s.weight, s.reps, s.rir);
+    if (v > best) best = v;
+  }
+  return best;
+}
+
+/**
+ * Ряд e1RM по сессиям (по возрастанию даты).
+ * Точка: { date, weekNo, isDeload, e1rm, isCalibration }.
+ * Для тренда берём лучший рабочий сет; если в сессии были только
+ * калибровочные — точка помечается isCalibration.
+ */
+function e1rmSeries(state, exerciseId) {
+  const sessions = [...state.sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const out = [];
+  for (const ses of sessions) {
+    const all = ses.sets.filter((s) => s.exerciseId === exerciseId);
+    if (!all.length) continue;
+    const work = all.filter((s) => !s.isCalibration);
+    const isCal = work.length === 0;
+    const best = bestE1rm(isCal ? all : work);
+    out.push({
+      date: ses.date,
+      weekNo: ses.weekNo,
+      isDeload: !!ses.isDeload,
+      e1rm: +best.toFixed(1),
+      isCalibration: isCal,
+    });
+  }
+  return out;
+}
+
+/* ---------- недельный объём по мышечным группам ---------- */
+
+/**
+ * Число рабочих сетов по primaryMuscle за неделю (weekOffset назад от now).
+ * → { weekStart, byMuscle: [{ muscle, count, status }] }
+ * status: 'low' (<10) | 'ok' | 'high' (>20).
+ */
+function weeklyVolume(state, { now = new Date(), weekOffset = 0, corridor = VOLUME_CORRIDOR } = {}) {
+  const start = startOfWeek(now);
+  start.setUTCDate(start.getUTCDate() - weekOffset * 7);
+  const startMs = start.getTime();
+  const endMs = startMs + 7 * 86400000;
+
+  const muscleOf = {};
+  for (const ex of state.exercises) muscleOf[ex.id] = ex.primaryMuscle;
+
+  const counts = Object.fromEntries(MUSCLE_ORDER.map((m) => [m, 0]));
+  for (const ses of state.sessions) {
+    const ms = new Date(ses.date).getTime();
+    if (ms < startMs || ms >= endMs) continue;
+    for (const s of ses.sets) {
+      if (s.isCalibration) continue;
+      const m = muscleOf[s.exerciseId];
+      if (m in counts) counts[m] += 1;
+    }
+  }
+
+  const [lo, hi] = corridor;
+  const byMuscle = MUSCLE_ORDER.map((m) => ({
+    muscle: m,
+    count: counts[m],
+    status: counts[m] < lo ? 'low' : counts[m] > hi ? 'high' : 'ok',
+  }));
+  return { weekStart: start.toISOString().slice(0, 10), byMuscle };
+}
+
+/* ---------- детектор стагнации ---------- */
+
+/**
+ * Упражнения без роста e1RM minWeeks+ недель (вне делоуда), с допуском.
+ * Стагнация: пик e1RM за последние minWeeks недель не превысил пик
+ * предыдущих недель более чем на tolerance (доля).
+ * → [{ exerciseId, name, weeks, priorPeak, recentPeak, hint }]
+ */
+function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } = {}) {
+  const out = [];
+  for (const ex of state.exercises) {
+    const series = e1rmSeries(state, ex.id).filter((p) => !p.isCalibration && !p.isDeload);
+    if (series.length < 2) continue;
+
+    // максимум e1RM по неделям, по возрастанию
+    const byWeek = new Map();
+    for (const p of series) {
+      const k = weekKey(new Date(p.date));
+      byWeek.set(k, Math.max(byWeek.get(k) || 0, p.e1rm));
+    }
+    const weeks = [...byWeek.keys()].sort().map((k) => byWeek.get(k));
+    if (weeks.length < minWeeks + 1) continue;   // нужна база + окно наблюдения
+
+    const recent = weeks.slice(-minWeeks);
+    const prior = weeks.slice(0, -minWeeks);
+    const priorPeak = Math.max(...prior);
+    const recentPeak = Math.max(...recent);
+
+    if (recentPeak <= priorPeak * (1 + tolerance)) {
+      out.push({
+        exerciseId: ex.id,
+        name: ex.name,
+        weeks: minWeeks,
+        priorPeak: +priorPeak.toFixed(1),
+        recentPeak: +recentPeak.toFixed(1),
+        hint: `e1RM не растёт ${minWeeks}+ нед. Гипотеза (не директива): сменить вариацию, проверить объём/сон/питание.`,
+      });
+    }
+  }
+  return out;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
+    startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
+  };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * ui-workout.js — экран активной тренировки + таймер отдыха
+ * DOM-код изолирован в initWorkout(); чистые хелперы экспортируются
+ * отдельно (тестируются node-ом без DOM).
+ *
+ * Зависимости в браузере — глобальные функции store.js/engine.js
+ * (startSession/logSet/save/getExercise/exerciseHistory, recommend/
+ * calibrate/mesoStatus/context). В node инъектируются через opts.
+ *
+ * ВРЕМЕННО (до чанка 6): захардкожен демо-день A и стартует свежая
+ * сессия при монтировании. Реальный выбор дня/сессии — конструктор
+ * (чанк 4) и app.js (чанк 6).
+ * ============================================================ */
+
+/* ---------- демо-день A (заглушка до конструктора) ---------- */
+
+function demoDayA() {
+  return {
+    id: 'day-a',
+    label: 'A',
+    items: [
+      { exerciseId: 'bb-bench-press', repRangeMin: 6,  repRangeMax: 10, workSets: 3, targetRIR: 2, restSec: 180 },
+      { exerciseId: 'bb-row',         repRangeMin: 8,  repRangeMax: 12, workSets: 3, targetRIR: 2, restSec: 150 },
+      { exerciseId: 'ohp',            repRangeMin: 8,  repRangeMax: 12, workSets: 3, targetRIR: 2, restSec: 150 },
+      { exerciseId: 'bb-curl',        repRangeMin: 10, repRangeMax: 15, workSets: 3, targetRIR: 2, restSec: 90  },
+    ],
+  };
+}
+
+/* ---------- чистые хелперы (тестируемые) ---------- */
+
+/** Секунды → "m:ss". */
+function fmtClock(sec) {
+  const s = Math.max(0, Math.round(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r < 10 ? '0' : ''}${r}`;
+}
+
+/** Остаток таймера отдыха в секундах, не меньше 0. */
+function computeRemaining(endTs, now) {
+  return Math.max(0, Math.ceil((endTs - now) / 1000));
+}
+
+/** Шаг степпера с клампом к [min, max]; точность приводится к сетке шага. */
+function clampStep(value, delta, step, min, max) {
+  let v = +(Number(value) + delta * step).toFixed(3);
+  if (min != null && v < min) v = min;
+  if (max != null && v > max) v = max;
+  return v;
+}
+
+/** Прогресс дня: сколько рабочих сетов сделано из плановых. */
+function dayProgress(day, sessionSets) {
+  let done = 0, total = 0;
+  for (const it of day.items) {
+    total += it.workSets;
+    done += sessionSets.filter((s) => s.exerciseId === it.exerciseId && !s.isCalibration).length;
+  }
+  return { done: Math.min(done, total), total };
+}
+
+/**
+ * Что показывать по упражнению сейчас (чистая функция).
+ * exSets — сеты этого упражнения в текущей сессии (по порядку добавления).
+ * ctx — как для recommend: { meso, item, exercise, history }.
+ * engine — { recommend, calibrate }.
+ * → { mode: 'probe'|'control'|'work'|'done', rec?, calibration?, done? }
+ */
+function planExercise(item, exSets, ctx, engine) {
+  const work = exSets.filter((s) => !s.isCalibration);
+  const probe = exSets.find((s) => s.isCalibration);
+  const hasHistory = (ctx.history || []).some(
+    (h) => !h.isDeload && h.sets.some((s) => !s.isCalibration)
+  );
+
+  if (work.length >= item.workSets) return { mode: 'done', done: work.length };
+
+  // калибровочный сценарий: истории нет
+  if (!hasHistory && !ctx.meso.isDeload) {
+    if (!probe) {
+      return {
+        mode: 'probe',
+        rec: {
+          weight: null,
+          reps: Math.round((item.repRangeMin + item.repRangeMax) / 2),
+          targetRIR: 4,
+          reason: 'Разведочный подход: 10–15 повторов, НЕ до отказа. Он калибровочный.',
+        },
+      };
+    }
+    if (work.length === 0) {
+      const target = Math.round((item.repRangeMin + item.repRangeMax) / 2);
+      const cal = engine.calibrate(probe, {
+        targetReps: target,
+        targetRIR: ctx.meso.targetRIR,
+        weightStep: ctx.exercise.weightStep,
+      });
+      return {
+        mode: 'control',
+        calibration: cal,
+        rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
+      };
+    }
+    // контрольный сделан — продолжаем от последнего рабочего веса
+    const prev = work[work.length - 1];
+    return {
+      mode: 'work',
+      rec: {
+        weight: prev.weight,
+        reps: Math.min(prev.reps, item.repRangeMax),
+        targetRIR: ctx.meso.targetRIR,
+        reason: 'Калибровка подтверждена — держим вес.',
+      },
+    };
+  }
+
+  // обычная рекомендация
+  const rec = engine.recommend(item.exerciseId, work.length + 1, ctx);
+  if (work.length > 0) {
+    // автоподстановка прошлого сета этой сессии
+    const prev = work[work.length - 1];
+    return { mode: 'work', rec: { ...rec, weight: prev.weight } };
+  }
+  return { mode: 'work', rec };
+}
+
+/* ---------- DOM: монтирование экрана (браузер) ---------- */
+
+function initWorkout(root, opts = {}) {
+  const S = opts.store || {
+    startSession, logSet, save, getExercise, exerciseHistory,
+  };
+  const E = opts.engine || { recommend, calibrate, mesoStatus, context };
+  const onCommit = opts.onCommit || function () {};
+
+  let state = opts.state;
+  const day = opts.day || (state.program.days && state.program.days[0]) || demoDayA();
+  const meso = E.mesoStatus(state);
+
+  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
+  let session = null;      // иначе ленивая: создаётся при первом залоге
+  const today = new Date().toISOString().slice(0, 10);
+  const resumed = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today);
+  if (resumed) session = resumed;
+
+  const drafts = {};       // exId -> { weight, reps, rir, mode }
+  let timer = null;        // { endTs, restSec, handle }
+
+  function ensureSession() {
+    if (!session) {
+      const r = S.startSession(state, day.id, { isDeload: meso.isDeload });
+      state = r.state;
+      session = r.session;
+    }
+    return session;
+  }
+  function liveSession() {
+    if (!session) return { sets: [] };
+    return state.sessions.find((s) => s.id === session.id);
+  }
+  function exSets(exId) {
+    return liveSession().sets.filter((s) => s.exerciseId === exId);
+  }
+  function ctxFor(item) {
+    return E.context(state, item.exerciseId, item, S.exerciseHistory);
+  }
+  function planFor(item) {
+    return planExercise(item, exSets(item.exerciseId), ctxFor(item), E);
+  }
+  function ensureDraft(item, plan) {
+    const id = item.exerciseId;
+    if (!drafts[id] || drafts[id].mode !== plan.mode) {
+      drafts[id] = {
+        mode: plan.mode,
+        weight: plan.rec && plan.rec.weight != null ? plan.rec.weight
+          : (exSets(id).slice(-1)[0]?.weight ?? item._lastW ?? 20),
+        reps: plan.rec ? plan.rec.reps : item.repRangeMin,
+        rir: plan.rec ? plan.rec.targetRIR : 2,
+      };
+    }
+    return drafts[id];
+  }
+
+  /* --- рендер --- */
+  function render() {
+    const prog = dayProgress(day, liveSession().sets);
+    const parts = [];
+    parts.push(`
+      <header class="wk-head">
+        <div>
+          <div class="wk-title">День ${day.label} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
+          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR}</div>
+        </div>
+        <div class="wk-prog">${prog.done}/${prog.total}</div>
+      </header>`);
+
+    for (const item of day.items) {
+      const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
+      const plan = planFor(item);
+      const logged = exSets(item.exerciseId);
+      const badge = plan.mode === 'probe' ? '<span class="badge cal">калибровка</span>'
+        : plan.mode === 'control' ? '<span class="badge cal">контроль</span>'
+        : plan.mode === 'done' ? '<span class="badge ok">готово</span>' : '';
+
+      const rows = logged.map((s, i) => `
+        <div class="set-row done">
+          <span class="set-no">${s.isCalibration ? 'кал.' : '#' + (i + 1)}</span>
+          <span class="set-res">${s.weight} кг × ${s.reps}${s.rir != null ? ' · RIR ' + s.rir : ''}</span>
+          <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
+        </div>`).join('');
+
+      let active = '';
+      if (plan.mode !== 'done') {
+        const d = ensureDraft(item, plan);
+        active = `
+          <div class="rec-line">${plan.rec ? plan.rec.reason : ''}</div>
+          <div class="set-row active" data-ex="${item.exerciseId}">
+            <div class="stepper">
+              <button class="step" data-act="w-" data-ex="${item.exerciseId}">−</button>
+              <div class="val"><b>${d.weight}</b><small>кг</small></div>
+              <button class="step" data-act="w+" data-ex="${item.exerciseId}">+</button>
+            </div>
+            <div class="stepper">
+              <button class="step" data-act="r-" data-ex="${item.exerciseId}">−</button>
+              <div class="val"><b>${d.reps}</b><small>повт</small></div>
+              <button class="step" data-act="r+" data-ex="${item.exerciseId}">+</button>
+            </div>
+            <div class="stepper">
+              <button class="step" data-act="i-" data-ex="${item.exerciseId}">−</button>
+              <div class="val"><b>${d.rir}</b><small>RIR</small></div>
+              <button class="step" data-act="i+" data-ex="${item.exerciseId}">+</button>
+            </div>
+            <button class="log" data-act="log" data-ex="${item.exerciseId}">✓</button>
+          </div>`;
+      }
+
+      parts.push(`
+        <section class="ex-card${plan.mode === 'done' ? ' complete' : ''}">
+          <div class="ex-head">
+            <div class="ex-name">${ex.name} ${badge}</div>
+            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}</div>
+          </div>
+          ${rows}
+          ${active}
+        </section>`);
+    }
+
+    root.innerHTML = `<div class="wk-screen">${parts.join('')}</div>${timerHtml()}`;
+  }
+
+  function timerHtml() {
+    if (!timer) return '';
+    const rem = computeRemaining(timer.endTs, Date.now());
+    const pct = Math.round((1 - rem / timer.restSec) * 100);
+    const over = rem <= 0;
+    return `
+      <div class="rest-bar${over ? ' over' : ''}">
+        <div class="rest-fill" style="width:${Math.min(100, pct)}%"></div>
+        <div class="rest-txt">${over ? 'Отдых окончен' : 'Отдых ' + fmtClock(rem)}</div>
+        <button class="rest-add" data-act="rest+">+15с</button>
+        <button class="rest-skip" data-act="rest-skip">${over ? 'Ок' : 'Пропустить'}</button>
+      </div>`;
+  }
+
+  /* --- таймер отдыха --- */
+  function startRest(restSec) {
+    stopRest(false);
+    timer = { endTs: Date.now() + restSec * 1000, restSec, handle: null };
+    timer.handle = setInterval(() => {
+      const rem = computeRemaining(timer.endTs, Date.now());
+      if (rem <= 0) {
+        clearInterval(timer.handle);
+        timer.handle = null;
+        beep(); buzz();
+      }
+      render();
+    }, 250);
+    render();
+  }
+  function stopRest(rerender = true) {
+    if (timer && timer.handle) clearInterval(timer.handle);
+    timer = null;
+    if (rerender) render();
+  }
+
+  /* --- события --- */
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const exId = btn.dataset.ex;
+
+    if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
+    if (act === 'rest-skip') { stopRest(); return; }
+    if (act === 'undo') { removeSet(btn.dataset.set); return; }
+
+    const item = day.items.find((i) => i.exerciseId === exId);
+    if (!item) return;
+    const ex = S.getExercise(state, exId) || { weightStep: 2.5 };
+    const d = drafts[exId];
+    if (!d) return;
+
+    if (act === 'w-') d.weight = clampStep(d.weight, -1, ex.weightStep || 2.5, 0, null);
+    else if (act === 'w+') d.weight = clampStep(d.weight, +1, ex.weightStep || 2.5, 0, null);
+    else if (act === 'r-') d.reps = clampStep(d.reps, -1, 1, 1, 50);
+    else if (act === 'r+') d.reps = clampStep(d.reps, +1, 1, 1, 50);
+    else if (act === 'i-') d.rir = clampStep(d.rir, -1, 1, 0, 5);
+    else if (act === 'i+') d.rir = clampStep(d.rir, +1, 1, 0, 5);
+    else if (act === 'log') { logCurrent(item, d); return; }
+    render();
+  });
+
+  function logCurrent(item, d) {
+    ensureSession();
+    const setNo = exSets(item.exerciseId).length + 1;
+    const res = S.logSet(state, session.id, {
+      exerciseId: item.exerciseId,
+      setNo,
+      weight: d.weight,
+      reps: d.reps,
+      rir: d.rir,
+      isCalibration: d.mode === 'probe',
+    });
+    state = res.state;
+    S.save(state);
+    onCommit(state);
+    delete drafts[item.exerciseId];
+    startRest(item.restSec);
+  }
+
+  function removeSet(setId) {
+    // локальная правка: удаляем сет из сессии и пересохраняем
+    if (!session) return;
+    const sess = liveSession();
+    sess.sets = sess.sets.filter((s) => s.id !== setId);
+    S.save(state);
+    onCommit(state);
+    render();
+  }
+
+  render();
+  return { render, stopRest };
+}
+
+/* ---------- сигналы окончания отдыха ---------- */
+
+let _audioCtx = null;
+function beep() {
+  try {
+    if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return;
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = _audioCtx.createOscillator();
+    const g = _audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.value = 0.001;
+    o.connect(g); g.connect(_audioCtx.destination);
+    const t = _audioCtx.currentTime;
+    g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    o.start(t); o.stop(t + 0.36);
+  } catch (_) { /* тишина, если звук недоступен */ }
+}
+function buzz() {
+  try { if (navigator && navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (_) {}
+}
+
+/* export для node-тестов; в браузере — глобальные объявления */
+if (typeof module !== 'undefined') {
+  module.exports = {
+    demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
+  };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * ui-program.js — конструктор дней A/B/C + библиотека упражнений
+ * DOM в initProgram(); чистые хелперы экспортируются для тестов.
+ * Зависимости в браузере — глобали store.js/exercises.js. В node
+ * инъектируются через opts.store / opts.state.
+ * ============================================================ */
+
+/* ---------- чистые хелперы ---------- */
+
+/** Дефолтные параметры элемента дня под тип упражнения. */
+function defaultItemFor(ex) {
+  const iso = ex.kind === 'isolation';
+  return {
+    exerciseId: ex.id,
+    repRangeMin: iso ? 10 : 6,
+    repRangeMax: iso ? 15 : 10,
+    workSets: 3,
+    targetRIR: 2,
+    restSec: ex.kind === 'compound' ? 150 : 90,
+  };
+}
+
+/** Короткое описание элемента дня для строки списка. */
+function itemSummary(item, ex) {
+  const name = ex ? ex.name : item.exerciseId;
+  return `${name} · ${item.repRangeMin}–${item.repRangeMax}×${item.workSets} · RIR ${item.targetRIR} · ${item.restSec}с`;
+}
+
+/** Стартовая программа (день A) — засев пустой программы (заменит демо чанка 6). */
+function starterProgram() {
+  return [{
+    id: 'day-a',
+    label: 'A',
+    items: [
+      { exerciseId: 'bb-bench-press', repRangeMin: 6,  repRangeMax: 10, workSets: 3, targetRIR: 2, restSec: 180 },
+      { exerciseId: 'bb-row',         repRangeMin: 8,  repRangeMax: 12, workSets: 3, targetRIR: 2, restSec: 150 },
+      { exerciseId: 'ohp',            repRangeMin: 8,  repRangeMax: 12, workSets: 3, targetRIR: 2, restSec: 150 },
+      { exerciseId: 'bb-curl',        repRangeMin: 10, repRangeMax: 15, workSets: 3, targetRIR: 2, restSec: 90  },
+    ],
+  }];
+}
+
+function seedProgramIfEmpty(state) {
+  if (state.program.days.length > 0) return state;
+  return { ...state, program: { ...state.program, days: starterProgram() } };
+}
+
+/* ---------- DOM ---------- */
+
+function initProgram(root, opts = {}) {
+  const St = opts.store || {
+    load, save, searchExercises, getExercise,
+    addDay, deleteDay, addDayItem, updateDayItem, removeDayItem, moveDayItem,
+    addCustomExercise, deleteCustomExercise,
+  };
+  const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
+  const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
+
+  const onCommit = opts.onCommit || function () {};
+  let state = opts.state || St.load(lib());
+  let picker = null;   // { dayId } когда открыт выбор упражнения
+  let query = '', muscle = null, customOpen = false;
+
+  function persist(next) { state = next; St.save(state); onCommit(state); render(); }
+
+  function render() {
+    const days = state.program.days;
+    const daysHtml = days.map((d) => dayCard(d)).join('') ||
+      '<div class="placeholder">Нет дней. Добавьте первый.</div>';
+    root.innerHTML = `
+      <div class="prog-screen">
+        <div class="prog-top">
+          <div class="wk-title">Программа</div>
+          <button class="btn" data-act="add-day">+ день</button>
+        </div>
+        ${daysHtml}
+      </div>
+      ${picker ? pickerHtml() : ''}`;
+  }
+
+  function dayCard(d) {
+    const items = d.items.map((it, i) => {
+      const ex = St.getExercise(state, it.exerciseId) || { name: it.exerciseId };
+      return `
+        <div class="prog-item" data-day="${d.id}" data-idx="${i}">
+          <div class="pi-top">
+            <div class="pi-name">${ex.name}</div>
+            <div class="pi-ord">
+              <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
+              <button class="mini" data-act="down" data-day="${d.id}" data-idx="${i}">↓</button>
+              <button class="mini" data-act="rm-item" data-day="${d.id}" data-idx="${i}">✕</button>
+            </div>
+          </div>
+          <div class="pi-params">
+            ${miniStep(d.id, i, 'repRangeMin', it.repRangeMin, 'повт min')}
+            ${miniStep(d.id, i, 'repRangeMax', it.repRangeMax, 'повт max')}
+            ${miniStep(d.id, i, 'workSets', it.workSets, 'сеты')}
+            ${miniStep(d.id, i, 'targetRIR', it.targetRIR, 'RIR')}
+            ${miniStep(d.id, i, 'restSec', it.restSec, 'отдых, с')}
+          </div>
+        </div>`;
+    }).join('') || '<div class="pi-empty">Пусто — добавьте упражнение.</div>';
+
+    return `
+      <section class="day-card">
+        <div class="day-head">
+          <div class="day-label">День ${d.label}</div>
+          <div>
+            <button class="btn sm" data-act="add-item" data-day="${d.id}">+ упражнение</button>
+            <button class="mini" data-act="del-day" data-day="${d.id}">🗑</button>
+          </div>
+        </div>
+        ${items}
+      </section>`;
+  }
+
+  function miniStep(dayId, idx, field, value, label) {
+    return `
+      <div class="mstep" data-field="${field}">
+        <button class="ms-btn" data-act="p-" data-day="${dayId}" data-idx="${idx}" data-field="${field}">−</button>
+        <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+        <button class="ms-btn" data-act="p+" data-day="${dayId}" data-idx="${idx}" data-field="${field}">+</button>
+      </div>`;
+  }
+
+  function pickerHtml() {
+    const results = St.searchExercises(state, { query, muscle });
+    const chips = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core']
+      .map((m) => `<button class="chip${muscle === m ? ' on' : ''}" data-act="filter" data-m="${m}">${muscleLabels[m] || m}</button>`).join('');
+    const list = results.map((e) =>
+      `<button class="lib-row" data-act="pick" data-id="${e.id}">
+         <span>${e.name}${e.isCustom ? ' <span class="badge cal">своё</span>' : ''}</span>
+         <small>${muscleLabels[e.primaryMuscle] || e.primaryMuscle} · ${e.kind === 'compound' ? 'база' : 'изоляция'}</small>
+       </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
+
+    const custom = customOpen ? `
+      <div class="custom-form">
+        <input class="in" id="cx-name" placeholder="Название своего упражнения">
+        <div class="cx-err" id="cx-err"></div>
+        <div class="chips">${['chest','back','legs','shoulders','arms','core'].map((m)=>`<button class="chip${m==='chest'?' on':''}" data-act="cx-m" data-m="${m}">${muscleLabels[m]||m}</button>`).join('')}</div>
+        <div class="row">
+          <button class="chip" data-act="cx-kind" data-kind="compound">база</button>
+          <button class="chip on" data-act="cx-kind" data-kind="isolation">изоляция</button>
+          <input class="in short" id="cx-step" type="number" step="0.5" value="2.5" placeholder="шаг, кг">
+        </div>
+        <button class="btn" data-act="cx-create">Создать и добавить</button>
+      </div>` : `<button class="btn ghost" data-act="cx-open">+ своё упражнение</button>`;
+
+    return `
+      <div class="overlay" data-act="close-bg">
+        <div class="sheet">
+          <div class="sheet-head">
+            <b>Выбрать упражнение</b>
+            <button class="mini" data-act="close">✕</button>
+          </div>
+          <input class="in" id="lib-search" placeholder="Поиск…" value="${query}">
+          <div class="chips">${chips}</div>
+          <div class="lib-list">${list}</div>
+          ${custom}
+        </div>
+      </div>`;
+  }
+
+  /* --- события --- */
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const dayId = btn.dataset.day, idx = btn.dataset.idx != null ? +btn.dataset.idx : null;
+
+    switch (act) {
+      case 'add-day': { const r = St.addDay(state); persist(r.state); break; }
+      case 'del-day': { if (confirmDel('Удалить день?')) persist(St.deleteDay(state, dayId)); break; }
+      case 'rm-item': persist(St.removeDayItem(state, dayId, idx)); break;
+      case 'up': persist(St.moveDayItem(state, dayId, idx, -1)); break;
+      case 'down': persist(St.moveDayItem(state, dayId, idx, +1)); break;
+      case 'p-': case 'p+': stepParam(dayId, idx, btn.dataset.field, act === 'p+' ? +1 : -1); break;
+      case 'add-item': picker = { dayId }; query = ''; muscle = null; customOpen = false; render(); break;
+      case 'close': case 'close-bg': if (act === 'close' || e.target.classList.contains('overlay')) { picker = null; customOpen = false; render(); } break;
+      case 'filter': muscle = (muscle === btn.dataset.m ? null : btn.dataset.m); render(); break;
+      case 'pick': pickExercise(btn.dataset.id); break;
+      case 'cx-open': customOpen = true; render(); break;
+      // выбор мышцы/типа — только классы, без render (иначе стирается ввод названия)
+      case 'cx-m': root.querySelectorAll('.custom-form [data-act="cx-m"]').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); break;
+      case 'cx-kind': root.querySelectorAll('[data-act="cx-kind"]').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); break;
+      case 'cx-create': createCustom(); break;
+    }
+  });
+
+  // поиск: обновляем только список, чтобы не терять фокус ввода
+  root.addEventListener('input', (e) => {
+    if (e.target.id === 'lib-search') {
+      query = e.target.value;
+      const listEl = root.querySelector('.lib-list');
+      if (listEl) {
+        const results = St.searchExercises(state, { query, muscle });
+        listEl.innerHTML = results.map((ex) =>
+          `<button class="lib-row" data-act="pick" data-id="${ex.id}">
+             <span>${ex.name}${ex.isCustom ? ' <span class="badge cal">своё</span>' : ''}</span>
+             <small>${muscleLabels[ex.primaryMuscle] || ex.primaryMuscle} · ${ex.kind === 'compound' ? 'база' : 'изоляция'}</small>
+           </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
+      }
+    }
+  });
+
+  function stepParam(dayId, idx, field, dir) {
+    const day = state.program.days.find((d) => d.id === dayId);
+    const it = day.items[idx];
+    const step = field === 'restSec' ? 15 : 1;
+    const min = field === 'targetRIR' ? 0 : 1;
+    let v = it[field] + dir * step;
+    if (v < min) v = min;
+    if (field === 'targetRIR' && v > 5) v = 5;
+    if (field === 'repRangeMin' && v > it.repRangeMax) v = it.repRangeMax;
+    if (field === 'repRangeMax' && v < it.repRangeMin) v = it.repRangeMin;
+    persist(St.updateDayItem(state, dayId, idx, { [field]: v }));
+  }
+
+  function pickExercise(exId) {
+    const ex = St.getExercise(state, exId);
+    if (!ex || !picker) return;
+    persist(St.addDayItem(state, picker.dayId, defaultItemFor(ex)));
+    picker = null;
+  }
+
+  function createCustom() {
+    const name = (root.querySelector('#cx-name') || {}).value || '';
+    const step = (root.querySelector('#cx-step') || {}).value;
+    const kindBtn = root.querySelector('.custom-form [data-act="cx-kind"].on');
+    const kind = kindBtn ? kindBtn.dataset.kind : 'isolation';
+    const mBtn = root.querySelector('.custom-form [data-act="cx-m"].on');
+    const primaryMuscle = mBtn ? mBtn.dataset.m : 'chest';
+    try {
+      const r = St.addCustomExercise(state, { name, primaryMuscle, kind, weightStep: step });
+      let next = r.state;
+      if (picker) next = St.addDayItem(next, picker.dayId, defaultItemFor(r.exercise));
+      picker = null; customOpen = false;
+      persist(next);
+    } catch (err) {
+      const errEl = root.querySelector('#cx-err');   // без alert() — неблокирующая подсказка
+      if (errEl) errEl.textContent = err.message;
+    }
+  }
+
+  function confirmDel(msg) { return typeof confirm === 'undefined' ? true : confirm(msg); }
+
+  render();
+  return { render, getState: () => state };
+}
+
+/* export для node-тестов; в браузере — глобальные объявления */
+if (typeof module !== 'undefined') {
+  module.exports = { defaultItemFor, itemSummary, starterProgram, seedProgramIfEmpty, initProgram };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * ui-analytics.js — экран аналитики: e1RM (canvas), объём по группам
+ * (canvas), бейджи стагнации, лента истории с редактированием.
+ * Чистые модели графиков экспортируются для тестов; отрисовка на
+ * <canvas> и правки истории — DOM/браузер.
+ * Зависимости в браузере — глобали analytics.js / store.js / exercises.js.
+ * ============================================================ */
+
+/* ---------- чистые модели графиков (тестируемые) ---------- */
+
+/** Модель линейного графика e1RM → координаты точек в пикселях. */
+function lineChartModel(points, { w = 320, h = 160, pad = 28 } = {}) {
+  const n = points.length;
+  if (n === 0) return { pts: [], empty: true, min: 0, max: 0, n: 0 };
+  const vals = points.map((p) => p.e1rm);
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (min === max) { min -= 1; max += 1; }                 // избегаем деления на 0
+  const plotW = w - 2 * pad, plotH = h - 2 * pad;
+  const pts = points.map((p, i) => ({
+    x: pad + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1)),
+    y: pad + plotH * (1 - (p.e1rm - min) / (max - min)),
+    e1rm: p.e1rm,
+    isCalibration: !!p.isCalibration,
+  }));
+  return { pts, empty: false, min, max, n };
+}
+
+/** Модель столбчатого графика объёма + линии коридора. */
+function barChartModel(bars, { w = 320, h = 160, pad = 28, corridor = [10, 20] } = {}) {
+  const [lo, hi] = corridor;
+  const maxScale = Math.max(hi + 2, ...bars.map((b) => b.count));
+  const plotW = w - 2 * pad, plotH = h - 2 * pad;
+  const slot = plotW / Math.max(1, bars.length);
+  const bw = slot * 0.62;
+  const yOf = (v) => pad + plotH * (1 - v / maxScale);
+  const rects = bars.map((b, i) => {
+    const y = yOf(b.count);
+    return {
+      x: pad + i * slot + (slot - bw) / 2,
+      y,
+      w: bw,
+      h: pad + plotH - y,
+      muscle: b.muscle,
+      count: b.count,
+      status: b.status,
+    };
+  });
+  return { rects, loY: yOf(lo), hiY: yOf(hi), maxScale, baseY: pad + plotH };
+}
+
+/* ---------- палитра (canvas не читает CSS-переменные) ---------- */
+const APAL = {
+  line: '#4c8dff', cal: '#b07cff', grid: '#2b313b', axis: '#3a4759',
+  text: '#94a0b0', ok: '#4c8dff', low: '#f0a336', high: '#ff5d5d', barBg: '#3a4759',
+};
+
+/* ---------- DOM ---------- */
+
+function initAnalytics(root, opts = {}) {
+  const St = opts.store || { load, save, updateSet, deleteSet, getExercise };
+  const An = opts.analytics || { e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR };
+  const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
+  const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
+
+  const onCommit = opts.onCommit || function () {};
+  let state = opts.state || St.load(lib);
+  let selEx = null;
+  let editing = null;               // setId в режиме правки
+  let draft = null;                 // { weight, reps, rir }
+
+  function persist(next) { state = next; St.save(state); onCommit(state); render(); }
+
+  function loggedExercises() {
+    const ids = new Set();
+    for (const s of state.sessions) for (const st of s.sets) ids.add(st.exerciseId);
+    return state.exercises.filter((e) => ids.has(e.id));
+  }
+
+  function render() {
+    const exs = loggedExercises();
+    if (!selEx || !exs.some((e) => e.id === selEx)) selEx = exs.length ? exs[0].id : null;
+
+    const stg = An.stagnation(state);
+    root.innerHTML = `
+      <div class="an-screen">
+        <div class="wk-title">Аналитика</div>
+
+        <section class="an-card">
+          <div class="an-head">
+            <b>Динамика e1RM</b>
+            <select class="sel" id="an-ex">
+              ${exs.map((e) => `<option value="${e.id}"${e.id === selEx ? ' selected' : ''}>${e.name}</option>`).join('') || '<option>нет данных</option>'}
+            </select>
+          </div>
+          <canvas id="an-e1rm" class="chart"></canvas>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Объём за неделю</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
+          <canvas id="an-vol" class="chart"></canvas>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Стагнация</b></div>
+          ${stg.length
+            ? stg.map((s) => `<div class="stag"><div class="stag-name">${s.name}</div><div class="stag-hint">${s.hint}</div></div>`).join('')
+            : '<div class="pi-empty">Нет застоя — e1RM растёт по всем упражнениям с историей.</div>'}
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>История</b></div>
+          ${historyHtml()}
+        </section>
+      </div>`;
+
+    drawCharts();
+  }
+
+  function historyHtml() {
+    const sessions = [...state.sessions]
+      .filter((s) => s.sets.length)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 12);
+    if (!sessions.length) return '<div class="pi-empty">Пока нет залогированных тренировок.</div>';
+    return sessions.map((s) => {
+      const rows = s.sets.map((st) => setRow(st)).join('');
+      return `<div class="hist-ses">
+        <div class="hist-date">${s.date.slice(0, 10)}${s.isDeload ? ' · делоуд' : ''} · нед ${s.weekNo}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+  }
+
+  function setRow(st) {
+    const ex = St.getExercise(state, st.exerciseId) || { name: st.exerciseId, weightStep: 2.5 };
+    if (editing === st.id) {
+      return `<div class="hist-edit" data-set="${st.id}">
+        <div class="pi-name">${ex.name}</div>
+        <div class="pi-params">
+          ${eStep('weight', draft.weight, 'кг')}
+          ${eStep('reps', draft.reps, 'повт')}
+          ${eStep('rir', draft.rir, 'RIR')}
+        </div>
+        <div class="hist-actions">
+          <button class="btn sm" data-act="save-set" data-set="${st.id}">Сохранить</button>
+          <button class="btn sm ghost" data-act="cancel-set">Отмена</button>
+          <button class="mini" data-act="del-set" data-set="${st.id}">🗑</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="hist-row">
+      <span class="hist-ex">${ex.name}${st.isCalibration ? ' <span class="badge cal">кал.</span>' : ''}</span>
+      <span class="hist-val">${st.weight} × ${st.reps}${st.rir != null ? ' · RIR ' + st.rir : ''}</span>
+      <button class="mini" data-act="edit-set" data-set="${st.id}">✎</button>
+    </div>`;
+  }
+
+  function eStep(field, value, label) {
+    return `<div class="mstep" data-field="${field}">
+      <button class="ms-btn" data-act="e-" data-field="${field}">−</button>
+      <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+      <button class="ms-btn" data-act="e+" data-field="${field}">+</button>
+    </div>`;
+  }
+
+  /* --- отрисовка canvas --- */
+  function drawCharts() {
+    if (selEx) drawLine(root.querySelector('#an-e1rm'), An.e1rmSeries(state, selEx));
+    drawBars(root.querySelector('#an-vol'), An.weeklyVolume(state).byMuscle);
+  }
+
+  function fitCanvas(cv) {
+    if (!cv) return null;
+    const cssW = cv.clientWidth || 320, cssH = 160;
+    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    cv.width = cssW * dpr; cv.height = cssH * dpr;
+    cv.style.height = cssH + 'px';
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return { ctx, w: cssW, h: cssH };
+  }
+
+  function drawLine(cv, series) {
+    const c = fitCanvas(cv); if (!c) return;
+    const { ctx, w, h } = c;
+    const m = lineChartModel(series, { w, h });
+    ctx.clearRect(0, 0, w, h);
+    if (m.empty) { emptyText(ctx, w, h, 'Нет данных'); return; }
+    // ось min/max
+    ctx.fillStyle = APAL.text; ctx.font = '11px sans-serif';
+    ctx.fillText(m.max.toFixed(0), 4, 16);
+    ctx.fillText(m.min.toFixed(0), 4, h - 8);
+    // линия
+    ctx.strokeStyle = APAL.line; ctx.lineWidth = 2; ctx.beginPath();
+    m.pts.forEach((p, i) => { i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    ctx.stroke();
+    // точки
+    m.pts.forEach((p) => {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = p.isCalibration ? APAL.cal : APAL.line; ctx.fill();
+    });
+  }
+
+  function drawBars(cv, bars) {
+    const c = fitCanvas(cv); if (!c) return;
+    const { ctx, w, h } = c;
+    const m = barChartModel(bars, { w, h, corridor: An.VOLUME_CORRIDOR });
+    ctx.clearRect(0, 0, w, h);
+    // коридор
+    ctx.strokeStyle = APAL.axis; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    [m.loY, m.hiY].forEach((y) => { ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(w - 6, y); ctx.stroke(); });
+    ctx.setLineDash([]);
+    // столбцы
+    m.rects.forEach((r) => {
+      ctx.fillStyle = r.status === 'high' ? APAL.high : r.status === 'low' ? APAL.low : APAL.ok;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = APAL.text; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(muscleLabels[r.muscle] || r.muscle, r.x + r.w / 2, m.baseY + 12);
+      if (r.count) ctx.fillText(String(r.count), r.x + r.w / 2, r.y - 3);
+      ctx.textAlign = 'left';
+    });
+  }
+
+  function emptyText(ctx, w, h, txt) {
+    ctx.fillStyle = APAL.text; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(txt, w / 2, h / 2); ctx.textAlign = 'left';
+  }
+
+  /* --- события --- */
+  root.addEventListener('change', (e) => {
+    if (e.target.id === 'an-ex') { selEx = e.target.value; drawCharts(); }
+  });
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const act = btn.dataset.act, setId = btn.dataset.set;
+    const st = setId ? findSet(setId) : null;
+
+    if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }
+    else if (act === 'cancel-set') { editing = null; draft = null; render(); }
+    else if (act === 'e-' || act === 'e+') { stepDraft(btn.dataset.field, act === 'e+' ? 1 : -1, st); render(); }
+    else if (act === 'save-set' && st) { persist(St.updateSet(state, setId, { weight: draft.weight, reps: draft.reps, rir: draft.rir })); editing = null; draft = null; }
+    else if (act === 'del-set') { persist(St.deleteSet(state, setId)); editing = null; draft = null; }
+  });
+
+  function findSet(setId) {
+    for (const s of state.sessions) { const f = s.sets.find((x) => x.id === setId); if (f) return f; }
+    return null;
+  }
+  function stepDraft(field, dir, st) {
+    if (!draft) return;
+    const ex = st ? (St.getExercise(state, st.exerciseId) || { weightStep: 2.5 }) : { weightStep: 2.5 };
+    if (field === 'weight') draft.weight = Math.max(0, +(draft.weight + dir * (ex.weightStep || 2.5)).toFixed(3));
+    else if (field === 'reps') draft.reps = Math.max(1, draft.reps + dir);
+    else if (field === 'rir') draft.rir = Math.min(5, Math.max(0, draft.rir + dir));
+  }
+
+  render();
+  return { render, getState: () => state };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { lineChartModel, barChartModel, initAnalytics };
+}
+
+</script>
+  <script>
+/* ============================================================
+ * app.js — контроллер приложения: общий state, роутер экранов,
+ * экран настроек (мезоцикл + бэкап), напоминание о бэкапе.
+ * Единственный владелец state в браузере: экраны получают его и
+ * возвращают изменения через onCommit — store.save() остаётся
+ * единственной точкой записи.
+ * ============================================================ */
+
+function initApp() {
+  // общий state (владелец — app.js)
+  let state = load(EXERCISE_LIBRARY);
+  const seeded = seedProgramIfEmpty(state);
+  if (seeded !== state) { state = seeded; save(state); }
+
+  // экраны сообщают об изменениях сюда — держим один объект state
+  const onCommit = (next) => { state = next; };
+
+  const SCREENS = {
+    workout: (root) => initWorkout(root, { state, onCommit }),
+    program: (root) => initProgram(root, { state, onCommit }),
+    analytics: (root) => initAnalytics(root, { state, onCommit }),
+    settings: (root) => renderSettings(root),
+  };
+
+  function show(name) {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
+    // монтируем экран заново из актуального общего state
+    SCREENS[name](document.getElementById(name + '-root'));
+  }
+
+  document.getElementById('nav').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-screen]');
+    if (b) show(b.dataset.screen);
+  });
+
+  /* ---------- экран настроек: мезоцикл + бэкап ---------- */
+
+  function renderSettings(root) {
+    const m = mesoStatus(state);
+    const overdue = backupOverdue(state);
+    const last = state.settings.lastBackupAt ? state.settings.lastBackupAt.slice(0, 10) : 'никогда';
+
+    root.innerHTML = `
+      <div class="an-screen">
+        <div class="wk-title">Настройки</div>
+
+        <section class="an-card">
+          <div class="an-head"><b>Мезоцикл</b></div>
+          <div class="meso-row">
+            <div class="meso-badge">Цикл ${m.cycleNo}</div>
+            <div class="meso-badge">Неделя ${m.weekNo}${m.isDeload ? ' · делоуд' : ''}</div>
+            <div class="meso-badge">Цель RIR ${m.targetRIR}</div>
+          </div>
+          <div class="meso-actions">
+            <button class="btn" data-act="adv-week">Завершить неделю →</button>
+            <button class="btn ghost sm" data-act="deload-earlier">Делоуд раньше</button>
+            <button class="btn ghost sm" data-act="deload-later">Делоуд позже</button>
+          </div>
+          <div class="meso-hint">Делоуд на неделе ${m.deloadWeek}${m.deloadShift ? ` (сдвиг ${m.deloadShift > 0 ? '+' : ''}${m.deloadShift})` : ''}. Сдвиг ±1 — риск из PRD.</div>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Бэкап данных</b></div>
+          ${overdue ? '<div class="cx-err" style="color:var(--warn)">Пора сделать бэкап — данные хранятся только в этом браузере.</div>' : ''}
+          <div class="meso-hint">Последний бэкап: ${last}. Сессий: ${state.sessions.length}.</div>
+          <div class="meso-actions">
+            <button class="btn" data-act="export">Скачать JSON</button>
+            <label class="btn ghost" style="cursor:pointer">Импорт JSON
+              <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+            </label>
+          </div>
+          <div class="cx-err" id="backup-msg"></div>
+        </section>
+      </div>`;
+
+    root.onclick = (e) => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      if (act === 'adv-week') { state = advanceWeek(state); save(state); renderSettings(root); }
+      else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
+      else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }
+      else if (act === 'export') { doExport(root); }
+    };
+
+    const fileInput = root.querySelector('#import-file');
+    if (fileInput) fileInput.addEventListener('change', (e) => doImport(e, root));
+  }
+
+  function doExport(root) {
+    const b = exportBackup(state);
+    state = b.state; save(state);                        // фиксируем дату бэкапа
+    const url = URL.createObjectURL(new Blob([b.json], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = b.filename; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    renderSettings(root);
+  }
+
+  function doImport(e, root) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        state = importBackup(String(reader.result));
+        save(state);
+        renderSettings(root);
+      } catch (err) {
+        const msg = root.querySelector('#backup-msg');
+        if (msg) msg.textContent = 'Не удалось импортировать: ' + err.message;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // старт: экран тренировки; мягкое напоминание о бэкапе
+  show('workout');
+  if (backupOverdue(state)) {
+    const b = document.querySelector('#nav button[data-screen="settings"]');
+    if (b) b.classList.add('nudge');
+  }
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { initApp };
+} else if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+  else initApp();
+}
+
+</script>
+</body>
+</html>

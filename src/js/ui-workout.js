@@ -132,12 +132,18 @@ function initWorkout(root, opts = {}) {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
   const E = opts.engine || { recommend, calibrate, mesoStatus, context };
+  const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
   const day = opts.day || (state.program.days && state.program.days[0]) || demoDayA();
   const meso = E.mesoStatus(state);
 
-  let session = null;      // ленивая: создаётся при первом залоге (не плодим пустые сессии)
+  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
+  let session = null;      // иначе ленивая: создаётся при первом залоге
+  const today = new Date().toISOString().slice(0, 10);
+  const resumed = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today);
+  if (resumed) session = resumed;
+
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   let timer = null;        // { endTs, restSec, handle }
 
@@ -318,6 +324,7 @@ function initWorkout(root, opts = {}) {
     });
     state = res.state;
     S.save(state);
+    onCommit(state);
     delete drafts[item.exerciseId];
     startRest(item.restSec);
   }
@@ -328,6 +335,7 @@ function initWorkout(root, opts = {}) {
     const sess = liveSession();
     sess.sets = sess.sets.filter((s) => s.id !== setId);
     S.save(state);
+    onCommit(state);
     render();
   }
 

@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8123", "--directory", "src"],
       "port": 8123
+    },
+    {
+      "name": "workout-dist",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8124", "--directory", "dist"],
+      "port": 8124
     }
   ]
 }

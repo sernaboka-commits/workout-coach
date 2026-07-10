@@ -62,12 +62,13 @@ function initAnalytics(root, opts = {}) {
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
 
+  const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib);
   let selEx = null;
   let editing = null;               // setId в режиме правки
   let draft = null;                 // { weight, reps, rir }
 
-  function persist(next) { state = next; St.save(state); render(); }
+  function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
   function loggedExercises() {
     const ids = new Set();

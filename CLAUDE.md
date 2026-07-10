@@ -26,13 +26,16 @@
   проекция по Эпли под целевые повторы/RIR → контрольный подход → фиксация. Сеты
   помечаются isCalibration и исключаются из стагнации/e1RM
 
-## План чанков (по порядку)
-1. ✅ store.js + exercises.js (готово, 17/17 тестов зелёные)
-2. engine.js — recommend/calibrate/mesoStatus/advanceWeek + тесты
-3. ui-workout.js + index.html + app.css — экран тренировки, таймер отдыха
-4. ui-program.js — конструктор дней A/B/C, библиотека
-5. analytics.js + ui-analytics.js — e1RM, объём, стагнация, история
-6. app.js + build.js — навигация, склейка в dist/index.html, демо-программа
+## План чанков (по порядку) — все готовы ✅ (89/89 тестов зелёные)
+1. ✅ store.js + exercises.js (17/17)
+2. ✅ engine.js — recommend/calibrate/mesoStatus/advanceWeek (22/22)
+3. ✅ ui-workout.js + index.html + app.css — экран тренировки, таймер отдыха (11/11)
+4. ✅ ui-program.js + store-мутаторы программы + свои упражнения (16/16)
+5. ✅ analytics.js + ui-analytics.js — e1RM, объём, стагнация, история (16/16)
+6. ✅ app.js (общий state, роутер, настройки: мезоцикл+бэкап) + build.js → dist/index.html (7/7)
+
+Сборка артефакта: `node src/build.js` → dist/index.html (один офлайн-файл).
+Все тесты: `for f in test-chunk*.js; do node "$f"; done`
 
 ## Правила работы
 - Каждый чанк: код → тесты → git commit. Не переходить к следующему без зелёных тестов

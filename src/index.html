@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1116">
+  <title>Тренер · силовые</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Экран: Тренировка (чанк 3) -->
+    <section class="screen active" id="screen-workout">
+      <div id="workout-root"></div>
+    </section>
+
+    <!-- Экран: Программа (чанк 4) -->
+    <section class="screen" id="screen-program">
+      <div class="placeholder">Конструктор дней A/B/C и библиотека — чанк 4.</div>
+    </section>
+
+    <!-- Экран: Аналитика (чанк 5) -->
+    <section class="screen" id="screen-analytics">
+      <div class="placeholder">e1RM, объём по группам, стагнация, история — чанк 5.</div>
+    </section>
+
+    <!-- Экран: Настройки / бэкап (чанк 6) -->
+    <section class="screen" id="screen-settings">
+      <div class="placeholder">Бэкап (экспорт/импорт), мезоцикл, шаг веса — чанк 6.</div>
+    </section>
+  </div>
+
+  <!-- Нижняя навигация (полноценный роутер — app.js, чанк 6) -->
+  <nav class="nav" id="nav">
+    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Трен.</button>
+    <button data-screen="program"><span class="ico">🗂️</span>Программа</button>
+    <button data-screen="analytics"><span class="ico">📈</span>Аналитика</button>
+    <button data-screen="settings"><span class="ico">⚙️</span>Настройки</button>
+  </nav>
+
+  <!-- Порядок важен: библиотека → store → engine → ui -->
+  <script src="js/exercises.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui-workout.js"></script>
+
+  <!-- ВРЕМЕННЫЙ bootstrap (заменит app.js в чанке 6) -->
+  <script>
+    (function () {
+      var state = load(EXERCISE_LIBRARY);
+      initWorkout(document.getElementById('workout-root'), { state: state });
+
+      // временное переключение экранов (полноценный роутер — чанк 6)
+      var nav = document.getElementById('nav');
+      nav.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-screen]');
+        if (!b) return;
+        document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+        document.getElementById('screen-' + b.dataset.screen).classList.add('active');
+        nav.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+      });
+    })();
+  </script>
+</body>
+</html>

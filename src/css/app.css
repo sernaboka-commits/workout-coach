@@ -1,0 +1,143 @@
+/* ============================================================
+ * app.css — единая тёмная тема, mobile-first, крупные тач-элементы
+ * ============================================================ */
+
+:root {
+  --bg:        #0e1116;
+  --surface:   #171b22;
+  --surface-2: #1f242d;
+  --line:      #2b313b;
+  --text:      #e8ecf1;
+  --muted:     #94a0b0;
+  --accent:    #4c8dff;
+  --accent-2:  #2b6be0;
+  --ok:        #37c46a;
+  --warn:      #f0a336;
+  --cal:       #b07cff;
+  --danger:    #ff5d5d;
+  --tap:       56px;         /* минимальный размер тач-цели */
+  --radius:    14px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+/* --- каркас экранов --- */
+.app { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: 76px; }
+.screen { display: none; padding: 12px 12px 0; }
+.screen.active { display: block; }
+
+.placeholder {
+  margin-top: 40px; text-align: center; color: var(--muted);
+  padding: 24px; border: 1px dashed var(--line); border-radius: var(--radius);
+}
+
+/* --- нижняя навигация --- */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: flex; max-width: 560px; margin: 0 auto;
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+.nav button {
+  flex: 1; min-height: 64px; background: none; border: 0; color: var(--muted);
+  font-size: 12px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; cursor: pointer;
+}
+.nav button .ico { font-size: 20px; line-height: 1; }
+.nav button.active { color: var(--accent); }
+
+/* --- шапка тренировки --- */
+.wk-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 4px 14px;
+}
+.wk-title { font-weight: 700; font-size: 17px; }
+.wk-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.wk-prog {
+  font-weight: 700; font-size: 18px; color: var(--accent);
+  background: var(--surface-2); padding: 8px 14px; border-radius: 999px;
+}
+
+/* --- карточка упражнения --- */
+.ex-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.ex-card.complete { opacity: .7; }
+.ex-head { margin-bottom: 8px; }
+.ex-name { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.ex-meta { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+.badge.cal { background: rgba(176,124,255,.18); color: var(--cal); }
+.badge.ok  { background: rgba(55,196,106,.18); color: var(--ok); }
+
+.rec-line {
+  background: var(--surface-2); color: var(--muted);
+  font-size: 13px; padding: 8px 10px; border-radius: 10px; margin: 8px 0;
+  border-left: 3px solid var(--accent);
+}
+
+/* --- строка сета --- */
+.set-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.set-row.done {
+  background: var(--surface-2); border-radius: 10px; padding: 10px 12px;
+  font-size: 15px;
+}
+.set-row.done .set-no { color: var(--muted); width: 42px; font-size: 12px; }
+.set-row.done .set-res { flex: 1; font-weight: 600; }
+
+.set-row.active { justify-content: space-between; gap: 6px; }
+
+/* --- степпер --- */
+.stepper {
+  display: flex; align-items: center; background: var(--surface-2);
+  border-radius: 12px; overflow: hidden; flex: 1;
+}
+.stepper .step {
+  min-width: var(--tap); height: var(--tap); border: 0; cursor: pointer;
+  background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
+}
+.stepper .step:active { background: var(--line); }
+.stepper .val { flex: 1; text-align: center; padding: 4px 2px; }
+.stepper .val b { display: block; font-size: 19px; }
+.stepper .val small { color: var(--muted); font-size: 10.5px; }
+
+.log {
+  min-width: var(--tap); height: var(--tap); border: 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font-size: 24px; font-weight: 700; cursor: pointer;
+}
+.log:active { background: var(--accent-2); }
+
+.mini {
+  border: 0; background: transparent; color: var(--muted); font-size: 16px;
+  width: 32px; height: 32px; cursor: pointer; border-radius: 8px;
+}
+.mini:active { background: var(--line); color: var(--danger); }
+
+/* --- таймер отдыха --- */
+.rest-bar {
+  position: fixed; left: 0; right: 0; bottom: 76px; max-width: 560px; margin: 0 auto;
+  background: var(--surface-2); border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  overflow: hidden;
+}
+.rest-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; background: rgba(76,141,255,.18);
+  transition: width .25s linear; z-index: 0;
+}
+.rest-bar.over { background: rgba(55,196,106,.18); }
+.rest-bar.over .rest-fill { background: rgba(55,196,106,.28); }
+.rest-txt { flex: 1; font-weight: 700; z-index: 1; }
+.rest-add, .rest-skip {
+  z-index: 1; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 0;
+  background: var(--surface); color: var(--text); font-weight: 600; cursor: pointer;
+}
+.rest-skip { background: var(--accent); color: #fff; }

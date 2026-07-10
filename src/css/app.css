@@ -222,3 +222,35 @@ html, body {
 .custom-form { border-top: 1px solid var(--line); padding-top: 12px; }
 .custom-form .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .cx-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }
+
+/* ============================================================
+ * Экран аналитики
+ * ============================================================ */
+
+.an-screen .wk-title { padding: 6px 4px 12px; }
+.an-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.an-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+.an-head small { color: var(--muted); font-size: 12px; }
+.chart { width: 100%; height: 160px; display: block; }
+
+.sel {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 10px; font-size: 14px; max-width: 60%;
+}
+
+.stag { background: var(--surface-2); border-left: 3px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.stag-name { font-weight: 700; }
+.stag-hint { color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+.hist-ses { margin-bottom: 12px; }
+.hist-date { color: var(--muted); font-size: 12px; margin: 4px 2px 6px; }
+.hist-row { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.hist-ex { flex: 1; font-weight: 600; }
+.hist-val { color: var(--muted); }
+
+.hist-edit { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.hist-edit .pi-params { margin-top: 8px; }
+.hist-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }

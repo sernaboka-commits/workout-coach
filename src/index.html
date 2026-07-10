@@ -21,7 +21,7 @@
 
     <!-- Экран: Аналитика (чанк 5) -->
     <section class="screen" id="screen-analytics">
-      <div class="placeholder">e1RM, объём по группам, стагнация, история — чанк 5.</div>
+      <div id="analytics-root"></div>
     </section>
 
     <!-- Экран: Настройки / бэкап (чанк 6) -->
@@ -42,8 +42,10 @@
   <script src="js/exercises.js"></script>
   <script src="js/store.js"></script>
   <script src="js/engine.js"></script>
+  <script src="js/analytics.js"></script>
   <script src="js/ui-workout.js"></script>
   <script src="js/ui-program.js"></script>
+  <script src="js/ui-analytics.js"></script>
 
   <!-- ВРЕМЕННЫЙ bootstrap (заменит app.js в чанке 6) -->
   <script>
@@ -58,6 +60,9 @@
       function mountWorkout() {
         initWorkout(document.getElementById('workout-root'), { state: load(EXERCISE_LIBRARY) });
       }
+      function mountAnalytics() {
+        initAnalytics(document.getElementById('analytics-root'), { state: load(EXERCISE_LIBRARY) });
+      }
       mountWorkout();
 
       // временное переключение экранов (полноценный роутер — чанк 6)
@@ -69,8 +74,9 @@
         document.getElementById('screen-' + b.dataset.screen).classList.add('active');
         nav.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
         b.classList.add('active');
-        // тренировка перечитывает свежую программу при входе на вкладку
+        // экраны перечитывают свежие данные при входе на вкладку
         if (b.dataset.screen === 'workout') mountWorkout();
+        if (b.dataset.screen === 'analytics') mountAnalytics();
       });
     })();
   </script>

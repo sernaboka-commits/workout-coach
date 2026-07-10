@@ -141,3 +141,84 @@ html, body {
   background: var(--surface); color: var(--text); font-weight: 600; cursor: pointer;
 }
 .rest-skip { background: var(--accent); color: #fff; }
+
+/* ============================================================
+ * Экран программы (конструктор)
+ * ============================================================ */
+
+.prog-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 12px; }
+
+.btn {
+  border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+  font-weight: 600; padding: 10px 16px; min-height: 44px; cursor: pointer;
+}
+.btn.sm { padding: 8px 12px; min-height: 40px; font-size: 13px; }
+.btn.ghost { background: var(--surface-2); color: var(--text); }
+
+.day-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.day-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.day-label { font-weight: 700; font-size: 16px; }
+
+.pi-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+.prog-item {
+  background: var(--surface-2); border-radius: 10px; padding: 10px; margin-top: 8px;
+}
+.pi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pi-name { font-weight: 600; }
+.pi-ord { display: flex; gap: 2px; }
+
+.pi-params { display: flex; gap: 6px; flex-wrap: wrap; }
+.mstep {
+  display: flex; align-items: center; background: var(--surface);
+  border-radius: 10px; overflow: hidden; flex: 1; min-width: 92px;
+}
+.ms-btn {
+  min-width: 40px; height: 48px; border: 0; background: transparent;
+  color: var(--text); font-size: 22px; cursor: pointer;
+}
+.ms-btn:active { background: var(--line); }
+.ms-val { flex: 1; text-align: center; }
+.ms-val b { display: block; font-size: 16px; }
+.ms-val small { color: var(--muted); font-size: 9.5px; }
+
+/* --- оверлей выбора упражнения --- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 20;
+}
+.sheet {
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  border: 1px solid var(--line); padding: 14px;
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+.in {
+  width: 100%; box-sizing: border-box; margin-bottom: 10px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 12px; font-size: 15px;
+}
+.in.short { width: 100px; margin-bottom: 0; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  border-radius: 999px; padding: 8px 12px; font-size: 13px; cursor: pointer; min-height: 40px;
+}
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.lib-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.lib-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left; border: 0; background: var(--surface-2); color: var(--text);
+  border-radius: 10px; padding: 12px; cursor: pointer; min-height: 52px;
+}
+.lib-row small { color: var(--muted); }
+.lib-row:active { background: var(--line); }
+
+.custom-form { border-top: 1px solid var(--line); padding-top: 12px; }
+.custom-form .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cx-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }

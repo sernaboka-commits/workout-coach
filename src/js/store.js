@@ -203,6 +203,105 @@ function exerciseHistory(state, exerciseId, { includeCalibration = false, limit 
   return out;
 }
 
+/* ---------- программа: дни A/B/C и их упражнения ----------
+ * Тот же контракт, что у сессий: принимают state, возвращают новый
+ * (addDay/addCustomExercise возвращают { state, day|exercise }).
+ * DayTemplate = { id, label, items: [DayItem] }
+ * DayItem = { exerciseId, repRangeMin, repRangeMax, workSets, targetRIR, restSec }
+ */
+
+function nextDayLabel(days) {
+  const used = new Set(days.map((d) => d.label));
+  for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(c)) return c;
+  return 'День ' + (days.length + 1);
+}
+
+function normalizeItem(item) {
+  const it = {
+    exerciseId: item.exerciseId,
+    repRangeMin: Number(item.repRangeMin),
+    repRangeMax: Number(item.repRangeMax),
+    workSets: Number(item.workSets),
+    targetRIR: item.targetRIR == null ? 2 : Number(item.targetRIR),
+    restSec: Number(item.restSec),
+  };
+  if (!it.exerciseId) throw new Error('Нужен exerciseId');
+  if (!(it.workSets > 0)) throw new Error('workSets должно быть > 0');
+  if (!(it.repRangeMin > 0) || !(it.repRangeMax >= it.repRangeMin)) throw new Error('Некорректный диапазон повторов');
+  return it;
+}
+
+function mapDay(state, dayId, fn) {
+  let found = false;
+  const days = state.program.days.map((d) => {
+    if (d.id !== dayId) return d;
+    found = true;
+    return fn(d);
+  });
+  if (!found) throw new Error('День не найден: ' + dayId);
+  return { ...state, program: { ...state.program, days } };
+}
+
+function addDay(state, { label } = {}) {
+  const day = { id: genId('day'), label: label || nextDayLabel(state.program.days), items: [] };
+  return { state: { ...state, program: { ...state.program, days: [...state.program.days, day] } }, day };
+}
+
+function deleteDay(state, dayId) {
+  return { ...state, program: { ...state.program, days: state.program.days.filter((d) => d.id !== dayId) } };
+}
+
+function addDayItem(state, dayId, item) {
+  const it = normalizeItem(item);
+  return mapDay(state, dayId, (d) => ({ ...d, items: [...d.items, it] }));
+}
+
+function updateDayItem(state, dayId, index, patch) {
+  const allowed = ['exerciseId', 'repRangeMin', 'repRangeMax', 'workSets', 'targetRIR', 'restSec'];
+  const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
+  return mapDay(state, dayId, (d) => {
+    if (index < 0 || index >= d.items.length) throw new Error('Нет элемента #' + index);
+    return { ...d, items: d.items.map((it, i) => (i === index ? { ...it, ...clean } : it)) };
+  });
+}
+
+function removeDayItem(state, dayId, index) {
+  return mapDay(state, dayId, (d) => ({ ...d, items: d.items.filter((_, i) => i !== index) }));
+}
+
+function moveDayItem(state, dayId, index, dir) {
+  return mapDay(state, dayId, (d) => {
+    const items = d.items.slice();
+    const j = index + dir;
+    if (j < 0 || j >= items.length) return d;
+    [items[index], items[j]] = [items[j], items[index]];
+    return { ...d, items };
+  });
+}
+
+/* ---------- пользовательские упражнения ---------- */
+
+function addCustomExercise(state, ex) {
+  if (!ex || !ex.name || !ex.name.trim()) throw new Error('Нужно название упражнения');
+  const exercise = {
+    id: genId('cx'),
+    name: ex.name.trim(),
+    primaryMuscle: ex.primaryMuscle || 'chest',
+    secondaryMuscles: Array.isArray(ex.secondaryMuscles) ? ex.secondaryMuscles : [],
+    kind: ex.kind === 'compound' ? 'compound' : 'isolation',
+    weightStep: Number(ex.weightStep) || state.settings.weightStepDefault,
+    isCustom: true,
+  };
+  return { state: { ...state, exercises: [...state.exercises, exercise] }, exercise };
+}
+
+function deleteCustomExercise(state, id) {
+  const ex = state.exercises.find((e) => e.id === id);
+  if (!ex) throw new Error('Упражнение не найдено');
+  if (!ex.isCustom) throw new Error('Встроенные упражнения удалять нельзя');
+  return { ...state, exercises: state.exercises.filter((e) => e.id !== id) };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     STORAGE_KEY, SCHEMA_VERSION,
@@ -210,5 +309,8 @@ if (typeof module !== 'undefined') {
     exportBackup, importBackup, backupOverdue,
     startSession, logSet, updateSet, deleteSet,
     exerciseHistory, genId,
+    nextDayLabel, addDay, deleteDay,
+    addDayItem, updateDayItem, removeDayItem, moveDayItem,
+    addCustomExercise, deleteCustomExercise,
   };
 }

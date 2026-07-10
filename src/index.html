@@ -16,7 +16,7 @@
 
     <!-- Экран: Программа (чанк 4) -->
     <section class="screen" id="screen-program">
-      <div class="placeholder">Конструктор дней A/B/C и библиотека — чанк 4.</div>
+      <div id="program-root"></div>
     </section>
 
     <!-- Экран: Аналитика (чанк 5) -->
@@ -43,12 +43,22 @@
   <script src="js/store.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/ui-workout.js"></script>
+  <script src="js/ui-program.js"></script>
 
   <!-- ВРЕМЕННЫЙ bootstrap (заменит app.js в чанке 6) -->
   <script>
     (function () {
+      // засеваем стартовую программу (день A), если пусто
       var state = load(EXERCISE_LIBRARY);
-      initWorkout(document.getElementById('workout-root'), { state: state });
+      var seeded = seedProgramIfEmpty(state);
+      if (seeded !== state) { save(seeded); state = seeded; }
+
+      initProgram(document.getElementById('program-root'), {});
+
+      function mountWorkout() {
+        initWorkout(document.getElementById('workout-root'), { state: load(EXERCISE_LIBRARY) });
+      }
+      mountWorkout();
 
       // временное переключение экранов (полноценный роутер — чанк 6)
       var nav = document.getElementById('nav');
@@ -59,6 +69,8 @@
         document.getElementById('screen-' + b.dataset.screen).classList.add('active');
         nav.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
         b.classList.add('active');
+        // тренировка перечитывает свежую программу при входе на вкладку
+        if (b.dataset.screen === 'workout') mountWorkout();
       });
     })();
   </script>

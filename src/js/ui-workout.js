@@ -134,16 +134,23 @@ function initWorkout(root, opts = {}) {
   const E = opts.engine || { recommend, calibrate, mesoStatus, context };
 
   let state = opts.state;
-  const day = opts.day || demoDayA();
+  const day = opts.day || (state.program.days && state.program.days[0]) || demoDayA();
   const meso = E.mesoStatus(state);
 
-  let session;
-  ({ state, session } = S.startSession(state, day.id, { isDeload: meso.isDeload }));
-
+  let session = null;      // ленивая: создаётся при первом залоге (не плодим пустые сессии)
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   let timer = null;        // { endTs, restSec, handle }
 
+  function ensureSession() {
+    if (!session) {
+      const r = S.startSession(state, day.id, { isDeload: meso.isDeload });
+      state = r.state;
+      session = r.session;
+    }
+    return session;
+  }
   function liveSession() {
+    if (!session) return { sets: [] };
     return state.sessions.find((s) => s.id === session.id);
   }
   function exSets(exId) {
@@ -299,6 +306,7 @@ function initWorkout(root, opts = {}) {
   });
 
   function logCurrent(item, d) {
+    ensureSession();
     const setNo = exSets(item.exerciseId).length + 1;
     const res = S.logSet(state, session.id, {
       exerciseId: item.exerciseId,
@@ -316,6 +324,7 @@ function initWorkout(root, opts = {}) {
 
   function removeSet(setId) {
     // локальная правка: удаляем сет из сессии и пересохраняем
+    if (!session) return;
     const sess = liveSession();
     sess.sets = sess.sets.filter((s) => s.id !== setId);
     S.save(state);

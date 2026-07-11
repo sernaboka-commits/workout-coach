@@ -16,6 +16,7 @@ function initApp() {
 
   const SCREENS = {
     workout: (root) => initWorkout(root, { state, onCommit }),
+    run: (root) => initRun(root, { state, onCommit }),
     program: (root) => initProgram(root, { state, onCommit }),
     analytics: (root) => initAnalytics(root, { state, onCommit }),
     settings: (root) => renderSettings(root),

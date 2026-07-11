@@ -151,9 +151,88 @@ function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } 
   return out;
 }
 
+/* ============================================================
+ * Бег (v2). Методология: Дэниелс (типы тренировок), Сейлер 80/20
+ * (поляризация: ≥75–80% времени — лёгкая интенсивность), правило
+ * ~10% недельного прироста объёма.
+ * ============================================================ */
+
+const RUN_TYPES = {
+  recovery: { label: 'Восстановительный', hard: false },
+  easy:     { label: 'Лёгкий',            hard: false },
+  long:     { label: 'Длинный',           hard: false },
+  tempo:    { label: 'Темповый',          hard: true },
+  interval: { label: 'Интервалы',         hard: true },
+  reps:     { label: 'Повторы/спринты',   hard: true },
+};
+
+/** Темп, сек/км. */
+function paceSecKm(distanceKm, durationSec) {
+  return durationSec / distanceKm;
+}
+
+/** Сек/км → "м:сс". */
+function fmtPace(sec) {
+  if (!isFinite(sec) || sec <= 0) return '–';
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+/** Недельный ряд: последние weeks недель (включая текущую, старые первыми).
+ *  → [{ weekStart, km, easyMin, hardMin }] */
+function runWeeklySeries(state, { weeks = 8, now = new Date() } = {}) {
+  const out = [];
+  const cur = startOfWeek(now);
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = new Date(cur); start.setUTCDate(start.getUTCDate() - i * 7);
+    out.push({ weekStart: start.toISOString().slice(0, 10), _ms: start.getTime(), km: 0, easyMin: 0, hardMin: 0 });
+  }
+  for (const r of state.runs || []) {
+    const ms = startOfWeek(new Date(r.date)).getTime();
+    const w = out.find((x) => x._ms === ms);
+    if (!w) continue;
+    w.km += r.distanceKm;
+    const min = r.durationSec / 60;
+    if (RUN_TYPES[r.type] && RUN_TYPES[r.type].hard) w.hardMin += min; else w.easyMin += min;
+  }
+  return out.map(({ _ms, ...w }) => ({ ...w, km: +w.km.toFixed(1) }));
+}
+
+/** Ряд темпа лёгких пробежек (recovery/easy/long), по возрастанию даты. */
+function easyPaceSeries(state) {
+  return (state.runs || [])
+    .filter((r) => RUN_TYPES[r.type] && !RUN_TYPES[r.type].hard)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map((r) => ({ date: r.date, pace: +paceSecKm(r.distanceKm, r.durationSec).toFixed(1), hr: r.avgHr }));
+}
+
+/** Доля интенсивного времени за окно (80/20 Сейлера).
+ *  → { easyMin, hardMin, hardPct, sessions, status } */
+function hardSharePct(state, { days = 28, now = new Date() } = {}) {
+  const fromMs = now.getTime() - days * 86400000;
+  let easyMin = 0, hardMin = 0, sessions = 0;
+  for (const r of state.runs || []) {
+    if (new Date(r.date).getTime() < fromMs) continue;
+    sessions++;
+    const min = r.durationSec / 60;
+    if (RUN_TYPES[r.type] && RUN_TYPES[r.type].hard) hardMin += min; else easyMin += min;
+  }
+  const total = easyMin + hardMin;
+  const hardPct = total > 0 ? Math.round((hardMin / total) * 100) : 0;
+  // статус имеет смысл при ≥3 пробежках; порог 25% — мягкая граница 80/20
+  const status = sessions < 3 ? 'na' : hardPct <= 25 ? 'ok' : 'high';
+  return { easyMin: Math.round(easyMin), hardMin: Math.round(hardMin), hardPct, sessions, status };
+}
+
+/** Правило ~10%: резкий рост объёма прошлой недели к позапрошлой. */
+function rampWarning(prevKm, lastKm) {
+  return prevKm >= 5 && lastKm > prevKm * 1.1;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
+    RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
   };
 }

@@ -347,6 +347,31 @@ html, body {
 .meso-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .meso-hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
+/* ============================================================
+ * Экран бега
+ * ============================================================ */
+
+.run-grid { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.run-f { flex: 1 1 60px; min-width: 60px; display: flex; flex-direction: column; gap: 3px; }
+.run-f small { color: var(--muted); font-size: 11px; padding-left: 2px; }
+.run-f .in { margin-bottom: 0; padding: 10px 8px; text-align: center; }
+
+.share-row { display: flex; align-items: center; gap: 10px; }
+.share-bar { flex: 1; height: 14px; background: rgba(55,196,106,.25); border-radius: 999px; overflow: hidden; }
+.share-hard { height: 100%; background: var(--accent); border-radius: 999px 0 0 999px; }
+.share-hard.over { background: var(--danger); }
+.ok-txt { color: var(--ok); } .warn-txt { color: var(--danger); }
+
+.run-row {
+  display: flex; align-items: center; gap: 8px; background: var(--surface-2);
+  border-left: 3px solid var(--ok); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+}
+.run-row.hard { border-left-color: var(--warn); }
+.run-main { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.run-main b { font-size: 14px; }
+.run-main span { color: var(--muted); font-size: 13px; }
+.run-main small { color: var(--muted); font-size: 12px; opacity: .85; }
+
 /* «нудж» на вкладке настроек, если бэкап просрочен */
 .nav button.nudge { position: relative; }
 .nav button.nudge::after {

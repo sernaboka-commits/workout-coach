@@ -360,6 +360,31 @@ html, body {
 .meso-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .meso-hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
+/* ============================================================
+ * Экран бега
+ * ============================================================ */
+
+.run-grid { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.run-f { flex: 1 1 60px; min-width: 60px; display: flex; flex-direction: column; gap: 3px; }
+.run-f small { color: var(--muted); font-size: 11px; padding-left: 2px; }
+.run-f .in { margin-bottom: 0; padding: 10px 8px; text-align: center; }
+
+.share-row { display: flex; align-items: center; gap: 10px; }
+.share-bar { flex: 1; height: 14px; background: rgba(55,196,106,.25); border-radius: 999px; overflow: hidden; }
+.share-hard { height: 100%; background: var(--accent); border-radius: 999px 0 0 999px; }
+.share-hard.over { background: var(--danger); }
+.ok-txt { color: var(--ok); } .warn-txt { color: var(--danger); }
+
+.run-row {
+  display: flex; align-items: center; gap: 8px; background: var(--surface-2);
+  border-left: 3px solid var(--ok); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+}
+.run-row.hard { border-left-color: var(--warn); }
+.run-main { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.run-main b { font-size: 14px; }
+.run-main span { color: var(--muted); font-size: 13px; }
+.run-main small { color: var(--muted); font-size: 12px; opacity: .85; }
+
 /* «нудж» на вкладке настроек, если бэкап просрочен */
 .nav button.nudge { position: relative; }
 .nav button.nudge::after {
@@ -374,6 +399,11 @@ html, body {
     <!-- Экран: Тренировка (чанк 3) -->
     <section class="screen active" id="screen-workout">
       <div id="workout-root"></div>
+    </section>
+
+    <!-- Экран: Бег (v2) -->
+    <section class="screen" id="screen-run">
+      <div id="run-root"></div>
     </section>
 
     <!-- Экран: Программа (чанк 4) -->
@@ -394,10 +424,11 @@ html, body {
 
   <!-- Нижняя навигация (полноценный роутер — app.js, чанк 6) -->
   <nav class="nav" id="nav">
-    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Трен.</button>
-    <button data-screen="program"><span class="ico">🗂️</span>Программа</button>
-    <button data-screen="analytics"><span class="ico">📈</span>Аналитика</button>
-    <button data-screen="settings"><span class="ico">⚙️</span>Настройки</button>
+    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Зал</button>
+    <button data-screen="run"><span class="ico">🏃</span>Бег</button>
+    <button data-screen="program"><span class="ico">🗂️</span>Прогр.</button>
+    <button data-screen="analytics"><span class="ico">📈</span>Аналит.</button>
+    <button data-screen="settings"><span class="ico">⚙️</span>Настр.</button>
   </nav>
 
   <!-- Порядок важен: библиотека → store → движок/аналитика → экраны → контроллер -->
@@ -542,7 +573,7 @@ if (typeof module !== 'undefined') {
  * ============================================================ */
 
 const STORAGE_KEY = 'workoutCoach.v1';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;   // v2: + runs[] (беговые тренировки)
 
 /* ---------- дефолтное состояние ---------- */
 
@@ -557,6 +588,7 @@ function defaultState(exerciseLibrary) {
     exercises: exerciseLibrary.map((e) => ({ ...e, isCustom: false })),
     program: { days: [] },          // конструктор заполнит A/B/C
     sessions: [],
+    runs: [],                       // беговые тренировки (v2)
     mesocycle: {
       cycleNo: 1,
       weekNo: 1,                    // 1..6 (6 = делоуд при growWeeks=5)
@@ -570,7 +602,8 @@ function defaultState(exerciseLibrary) {
 /* ---------- миграции ---------- */
 
 const MIGRATIONS = {
-  // 1 -> 2: (пример на будущее) (s) => { ...s, schemaVersion: 2 }
+  // 1 -> 2: добавлены беговые тренировки
+  1: (s) => ({ ...s, schemaVersion: 2, runs: Array.isArray(s.runs) ? s.runs : [] }),
 };
 
 function migrate(state) {
@@ -626,6 +659,7 @@ function validateState(s) {
   if (!s.program || !Array.isArray(s.program.days)) fail('program.days');
   if (!Array.isArray(s.sessions)) fail('sessions');
   if (!s.mesocycle || typeof s.mesocycle.weekNo !== 'number') fail('mesocycle');
+  if (s.schemaVersion >= 2 && !Array.isArray(s.runs)) fail('runs');
   return true;
 }
 
@@ -828,6 +862,33 @@ function moveDayItem(state, dayId, index, dir) {
   });
 }
 
+/* ---------- беговые тренировки (v2) ----------
+ * RunLog = { id, date, type, distanceKm, durationSec, avgHr|null,
+ *            rpe|null, intervals|null, note|null }
+ * type — ключ из RUN_TYPES (analytics.js)
+ */
+
+function addRun(state, input) {
+  const run = {
+    id: genId('run'),
+    date: input.date || new Date().toISOString(),
+    type: input.type,
+    distanceKm: Number(input.distanceKm),
+    durationSec: Math.round(Number(input.durationSec)),
+    avgHr: input.avgHr ? Number(input.avgHr) : null,
+    rpe: input.rpe ? Number(input.rpe) : null,
+    intervals: input.intervals || null,
+    note: input.note || null,
+  };
+  if (!run.type) throw new Error('Нужен тип пробежки');
+  if (!(run.distanceKm > 0) || !(run.durationSec > 0)) throw new Error('Некорректные дистанция/время');
+  return { state: { ...state, runs: [...(state.runs || []), run] }, run };
+}
+
+function deleteRun(state, runId) {
+  return { ...state, runs: (state.runs || []).filter((r) => r.id !== runId) };
+}
+
 /* ---------- пользовательские упражнения ---------- */
 
 function addCustomExercise(state, ex) {
@@ -861,6 +922,7 @@ if (typeof module !== 'undefined') {
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
+    addRun, deleteRun,
   };
 }
 
@@ -1289,10 +1351,89 @@ function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } 
   return out;
 }
 
+/* ============================================================
+ * Бег (v2). Методология: Дэниелс (типы тренировок), Сейлер 80/20
+ * (поляризация: ≥75–80% времени — лёгкая интенсивность), правило
+ * ~10% недельного прироста объёма.
+ * ============================================================ */
+
+const RUN_TYPES = {
+  recovery: { label: 'Восстановительный', hard: false },
+  easy:     { label: 'Лёгкий',            hard: false },
+  long:     { label: 'Длинный',           hard: false },
+  tempo:    { label: 'Темповый',          hard: true },
+  interval: { label: 'Интервалы',         hard: true },
+  reps:     { label: 'Повторы/спринты',   hard: true },
+};
+
+/** Темп, сек/км. */
+function paceSecKm(distanceKm, durationSec) {
+  return durationSec / distanceKm;
+}
+
+/** Сек/км → "м:сс". */
+function fmtPace(sec) {
+  if (!isFinite(sec) || sec <= 0) return '–';
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+/** Недельный ряд: последние weeks недель (включая текущую, старые первыми).
+ *  → [{ weekStart, km, easyMin, hardMin }] */
+function runWeeklySeries(state, { weeks = 8, now = new Date() } = {}) {
+  const out = [];
+  const cur = startOfWeek(now);
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = new Date(cur); start.setUTCDate(start.getUTCDate() - i * 7);
+    out.push({ weekStart: start.toISOString().slice(0, 10), _ms: start.getTime(), km: 0, easyMin: 0, hardMin: 0 });
+  }
+  for (const r of state.runs || []) {
+    const ms = startOfWeek(new Date(r.date)).getTime();
+    const w = out.find((x) => x._ms === ms);
+    if (!w) continue;
+    w.km += r.distanceKm;
+    const min = r.durationSec / 60;
+    if (RUN_TYPES[r.type] && RUN_TYPES[r.type].hard) w.hardMin += min; else w.easyMin += min;
+  }
+  return out.map(({ _ms, ...w }) => ({ ...w, km: +w.km.toFixed(1) }));
+}
+
+/** Ряд темпа лёгких пробежек (recovery/easy/long), по возрастанию даты. */
+function easyPaceSeries(state) {
+  return (state.runs || [])
+    .filter((r) => RUN_TYPES[r.type] && !RUN_TYPES[r.type].hard)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map((r) => ({ date: r.date, pace: +paceSecKm(r.distanceKm, r.durationSec).toFixed(1), hr: r.avgHr }));
+}
+
+/** Доля интенсивного времени за окно (80/20 Сейлера).
+ *  → { easyMin, hardMin, hardPct, sessions, status } */
+function hardSharePct(state, { days = 28, now = new Date() } = {}) {
+  const fromMs = now.getTime() - days * 86400000;
+  let easyMin = 0, hardMin = 0, sessions = 0;
+  for (const r of state.runs || []) {
+    if (new Date(r.date).getTime() < fromMs) continue;
+    sessions++;
+    const min = r.durationSec / 60;
+    if (RUN_TYPES[r.type] && RUN_TYPES[r.type].hard) hardMin += min; else easyMin += min;
+  }
+  const total = easyMin + hardMin;
+  const hardPct = total > 0 ? Math.round((hardMin / total) * 100) : 0;
+  // статус имеет смысл при ≥3 пробежках; порог 25% — мягкая граница 80/20
+  const status = sessions < 3 ? 'na' : hardPct <= 25 ? 'ok' : 'high';
+  return { easyMin: Math.round(easyMin), hardMin: Math.round(hardMin), hardPct, sessions, status };
+}
+
+/** Правило ~10%: резкий рост объёма прошлой недели к позапрошлой. */
+function rampWarning(prevKm, lastKm) {
+  return prevKm >= 5 && lastKm > prevKm * 1.1;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
+    RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
   };
 }
 
@@ -2659,6 +2800,208 @@ if (typeof module !== 'undefined') {
 </script>
   <script>
 /* ============================================================
+ * ui-run.js — экран беговых тренировок: журнал + графики прогресса.
+ * Методология: типы по Дэниелсу, поляризация 80/20 (Сейлер),
+ * правило ~10% прироста недельного объёма.
+ * Чистые расчёты — в analytics.js; графики переиспользуют
+ * lineChartModel/barChartModel из ui-analytics.js.
+ * ============================================================ */
+
+/* палитра canvas (CSS-переменные канвасу недоступны) */
+const RPAL = { line: '#37c46a', hr: '#f0a336', bar: '#4c8dff', warn: '#f0a336', bad: '#ff5d5d', text: '#94a0b0', axis: '#3a4759' };
+
+function initRun(root, opts = {}) {
+  const St = opts.store || { save, addRun, deleteRun };
+  const An = opts.analytics || {
+    RUN_TYPES, fmtPace, paceSecKm, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
+  };
+  const onCommit = opts.onCommit || function () {};
+  let state = opts.state;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const draft = { type: 'easy', date: today, km: '', min: '', sec: '', hr: '', rpe: '', intervals: '', note: '' };
+  let err = '';
+
+  function persist(next) { state = next; St.save(state); onCommit(state); render(); }
+
+  /* --- рендер --- */
+  function render() {
+    const share = An.hardSharePct(state);
+    const weekly = An.runWeeklySeries(state, { weeks: 8 });
+    // рост объёма: сравниваем две последние ЗАВЕРШЁННЫЕ недели
+    const ramp = weekly.length >= 3 && An.rampWarning(weekly[weekly.length - 3].km, weekly[weekly.length - 2].km);
+
+    const typeChips = Object.entries(An.RUN_TYPES).map(([k, t]) =>
+      `<button class="chip${draft.type === k ? ' on' : ''}" data-act="type" data-v="${k}">${t.label}</button>`).join('');
+
+    root.innerHTML = `
+      <div class="an-screen">
+        <div class="wk-title">Бег</div>
+
+        <section class="an-card">
+          <div class="an-head"><b>Новая пробежка</b><input class="in short" type="date" id="run-date" value="${draft.date}"></div>
+          <div class="chips">${typeChips}</div>
+          <div class="run-grid">
+            ${numField('km', 'км', draft.km, '0.1', 'напр. 8.5')}
+            ${numField('min', 'мин', draft.min, '1', '45')}
+            ${numField('sec', 'сек', draft.sec, '1', '30')}
+            ${numField('hr', 'пульс', draft.hr, '1', 'опц.')}
+            ${numField('rpe', 'RPE 1–10', draft.rpe, '1', 'опц.')}
+          </div>
+          <input class="in" id="run-intervals" placeholder="Отрезки, напр. 8×400м/отдых 90с (для интервалов)" value="${draft.intervals}">
+          <input class="in" id="run-note" placeholder="Заметка (самочувствие, покрытие…)" value="${draft.note}">
+          <div class="cx-err">${err}</div>
+          <button class="log-wide" data-act="log-run">✓ Записать пробежку</button>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Интенсивность за 4 недели</b><small>цель ≤ 20–25% тяжёлого (80/20)</small></div>
+          ${share.status === 'na'
+            ? '<div class="pi-empty">Мало данных — залогируй 3+ пробежки.</div>'
+            : `<div class="share-row">
+                 <div class="share-bar"><div class="share-hard${share.status === 'high' ? ' over' : ''}" style="width:${share.hardPct}%"></div></div>
+                 <b class="${share.status === 'high' ? 'warn-txt' : 'ok-txt'}">${share.hardPct}%</b>
+               </div>
+               <div class="meso-hint">Лёгкого ${share.easyMin} мин · тяжёлого ${share.hardMin} мин за ${share.sessions} пробежек.
+               ${share.status === 'high' ? ' <b>Выше 25% — добавь лёгких/восстановительных.</b>' : ' В коридоре поляризованной модели.'}</div>`}
+          ${ramp ? '<div class="cx-err" style="margin-top:8px">⚠ Объём прошлой недели вырос >10% к позапрошлой — следи за восстановлением (правило ~10%).</div>' : ''}
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Км в неделю</b><small>8 недель</small></div>
+          <canvas id="run-vol" class="chart"></canvas>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Темп лёгких пробежек</b><small>ниже = быстрее</small></div>
+          <canvas id="run-pace" class="chart"></canvas>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>Журнал</b></div>
+          ${runListHtml()}
+        </section>
+      </div>`;
+
+    drawVolume(root.querySelector('#run-vol'), An.runWeeklySeries(state, { weeks: 8 }));
+    drawPace(root.querySelector('#run-pace'), An.easyPaceSeries(state));
+  }
+
+  function numField(id, label, value, step, ph) {
+    return `<label class="run-f"><small>${label}</small>
+      <input class="in" id="run-${id}" type="number" inputmode="decimal" step="${step}" min="0" placeholder="${ph}" value="${value}"></label>`;
+  }
+
+  function runListHtml() {
+    const runs = [...(state.runs || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
+    if (!runs.length) return '<div class="pi-empty">Пока нет пробежек.</div>';
+    return runs.map((r) => {
+      const t = An.RUN_TYPES[r.type] || { label: r.type, hard: false };
+      const pace = An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec));
+      return `<div class="run-row${t.hard ? ' hard' : ''}">
+        <div class="run-main">
+          <b>${String(r.date).slice(0, 10)} · ${t.label}</b>
+          <span>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}${r.rpe ? ' · RPE ' + r.rpe : ''}</span>
+          ${r.intervals ? `<small>${r.intervals}</small>` : ''}${r.note ? `<small>${r.note}</small>` : ''}
+        </div>
+        <button class="mini" data-act="del-run" data-id="${r.id}">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  /* --- canvas --- */
+  function fit(cv) {
+    if (!cv) return null;
+    const w = cv.clientWidth || 320, h = 160;
+    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + 'px';
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    return { ctx, w, h };
+  }
+  function emptyTxt(ctx, w, h, t) { ctx.fillStyle = RPAL.text; ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(t, w / 2, h / 2); ctx.textAlign = 'left'; }
+
+  function drawVolume(cv, weekly) {
+    const c = fit(cv); if (!c) return;
+    const { ctx, w, h } = c;
+    ctx.clearRect(0, 0, w, h);
+    if (!weekly.some((x) => x.km > 0)) { emptyTxt(ctx, w, h, 'Нет данных'); return; }
+    const bars = weekly.map((x) => ({ muscle: x.weekStart.slice(5), count: x.km, status: 'ok' }));
+    const m = barChartModel(bars, { w, h, corridor: [0, 0] });
+    m.rects.forEach((r) => {
+      ctx.fillStyle = RPAL.bar; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = RPAL.text; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(r.muscle, r.x + r.w / 2, m.baseY + 11);
+      if (r.count) ctx.fillText(String(r.count), r.x + r.w / 2, r.y - 3);
+      ctx.textAlign = 'left';
+    });
+  }
+
+  function drawPace(cv, series) {
+    const c = fit(cv); if (!c) return;
+    const { ctx, w, h } = c;
+    ctx.clearRect(0, 0, w, h);
+    if (series.length < 2) { emptyTxt(ctx, w, h, 'Нужно 2+ лёгких пробежки'); return; }
+    const m = lineChartModel(series.map((p) => ({ e1rm: p.pace })), { w, h });
+    ctx.fillStyle = RPAL.text; ctx.font = '11px sans-serif';
+    ctx.fillText(An.fmtPace(m.max), 4, 16);
+    ctx.fillText(An.fmtPace(m.min), 4, h - 8);
+    ctx.strokeStyle = RPAL.line; ctx.lineWidth = 2; ctx.beginPath();
+    m.pts.forEach((p, i) => { i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    ctx.stroke();
+    m.pts.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fillStyle = RPAL.line; ctx.fill(); });
+  }
+
+  /* --- события --- */
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'type') { syncDraft(); draft.type = btn.dataset.v; err = ''; render(); }
+    else if (act === 'log-run') logRun();
+    else if (act === 'del-run') persist(St.deleteRun(state, btn.dataset.id));
+  });
+
+  function syncDraft() {
+    for (const k of ['km', 'min', 'sec', 'hr', 'rpe']) {
+      const el = root.querySelector('#run-' + k); if (el) draft[k] = el.value;
+    }
+    const d = root.querySelector('#run-date'); if (d) draft.date = d.value || today;
+    const iv = root.querySelector('#run-intervals'); if (iv) draft.intervals = iv.value;
+    const nt = root.querySelector('#run-note'); if (nt) draft.note = nt.value;
+  }
+
+  function logRun() {
+    syncDraft();
+    const km = parseFloat(draft.km);
+    const durationSec = (parseInt(draft.min || 0, 10) || 0) * 60 + (parseInt(draft.sec || 0, 10) || 0);
+    try {
+      const r = St.addRun(state, {
+        date: draft.date ? draft.date + 'T12:00:00.000Z' : undefined,
+        type: draft.type,
+        distanceKm: km,
+        durationSec,
+        avgHr: draft.hr, rpe: draft.rpe,
+        intervals: draft.intervals.trim() || null,
+        note: draft.note.trim() || null,
+      });
+      draft.km = ''; draft.min = ''; draft.sec = ''; draft.hr = ''; draft.rpe = ''; draft.intervals = ''; draft.note = '';
+      err = '';
+      persist(r.state);
+    } catch (ex) {
+      err = ex.message; render();
+    }
+  }
+
+  render();
+  return { render, getState: () => state };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { initRun };
+}
+
+</script>
+  <script>
+/* ============================================================
  * app.js — контроллер приложения: общий state, роутер экранов,
  * экран настроек (мезоцикл + бэкап), напоминание о бэкапе.
  * Единственный владелец state в браузере: экраны получают его и
@@ -2676,6 +3019,7 @@ function initApp() {
 
   const SCREENS = {
     workout: (root) => initWorkout(root, { state, onCommit }),
+    run: (root) => initRun(root, { state, onCommit }),
     program: (root) => initProgram(root, { state, onCommit }),
     analytics: (root) => initAnalytics(root, { state, onCommit }),
     settings: (root) => renderSettings(root),

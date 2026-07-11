@@ -19,6 +19,11 @@
       <div id="workout-root"></div>
     </section>
 
+    <!-- Экран: Бег (v2) -->
+    <section class="screen" id="screen-run">
+      <div id="run-root"></div>
+    </section>
+
     <!-- Экран: Программа (чанк 4) -->
     <section class="screen" id="screen-program">
       <div id="program-root"></div>
@@ -37,10 +42,11 @@
 
   <!-- Нижняя навигация (полноценный роутер — app.js, чанк 6) -->
   <nav class="nav" id="nav">
-    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Трен.</button>
-    <button data-screen="program"><span class="ico">🗂️</span>Программа</button>
-    <button data-screen="analytics"><span class="ico">📈</span>Аналитика</button>
-    <button data-screen="settings"><span class="ico">⚙️</span>Настройки</button>
+    <button class="active" data-screen="workout"><span class="ico">🏋️</span>Зал</button>
+    <button data-screen="run"><span class="ico">🏃</span>Бег</button>
+    <button data-screen="program"><span class="ico">🗂️</span>Прогр.</button>
+    <button data-screen="analytics"><span class="ico">📈</span>Аналит.</button>
+    <button data-screen="settings"><span class="ico">⚙️</span>Настр.</button>
   </nav>
 
   <!-- Порядок важен: библиотека → store → движок/аналитика → экраны → контроллер -->
@@ -52,6 +58,7 @@
   <script src="js/ui-workout.js"></script>
   <script src="js/ui-program.js"></script>
   <script src="js/ui-analytics.js"></script>
+  <script src="js/ui-run.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

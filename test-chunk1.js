@@ -40,7 +40,7 @@ t('load без данных -> дефолтное состояние', () => ass
 t('save -> load восстанавливает состояние', () => {
   store.save(state);
   const re = store.load(ex.EXERCISE_LIBRARY);
-  assert(re.schemaVersion === 1 && re.exercises.length === 60);
+  assert(re.schemaVersion === 2 && re.exercises.length === 60);
 });
 t('старое состояние (50 упр.) получает новые из библиотеки, кастомные целы', () => {
   const old = { ...state, exercises: [...state.exercises.slice(0, 50), { id: 'cx_test', name: 'Своё', primaryMuscle: 'chest', secondaryMuscles: [], kind: 'isolation', weightStep: 2.5, isCustom: true }] };

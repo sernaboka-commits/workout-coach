@@ -14,7 +14,7 @@
  * ============================================================ */
 
 const STORAGE_KEY = 'workoutCoach.v1';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;   // v2: + runs[] (беговые тренировки)
 
 /* ---------- дефолтное состояние ---------- */
 
@@ -29,6 +29,7 @@ function defaultState(exerciseLibrary) {
     exercises: exerciseLibrary.map((e) => ({ ...e, isCustom: false })),
     program: { days: [] },          // конструктор заполнит A/B/C
     sessions: [],
+    runs: [],                       // беговые тренировки (v2)
     mesocycle: {
       cycleNo: 1,
       weekNo: 1,                    // 1..6 (6 = делоуд при growWeeks=5)
@@ -42,7 +43,8 @@ function defaultState(exerciseLibrary) {
 /* ---------- миграции ---------- */
 
 const MIGRATIONS = {
-  // 1 -> 2: (пример на будущее) (s) => { ...s, schemaVersion: 2 }
+  // 1 -> 2: добавлены беговые тренировки
+  1: (s) => ({ ...s, schemaVersion: 2, runs: Array.isArray(s.runs) ? s.runs : [] }),
 };
 
 function migrate(state) {
@@ -98,6 +100,7 @@ function validateState(s) {
   if (!s.program || !Array.isArray(s.program.days)) fail('program.days');
   if (!Array.isArray(s.sessions)) fail('sessions');
   if (!s.mesocycle || typeof s.mesocycle.weekNo !== 'number') fail('mesocycle');
+  if (s.schemaVersion >= 2 && !Array.isArray(s.runs)) fail('runs');
   return true;
 }
 
@@ -300,6 +303,33 @@ function moveDayItem(state, dayId, index, dir) {
   });
 }
 
+/* ---------- беговые тренировки (v2) ----------
+ * RunLog = { id, date, type, distanceKm, durationSec, avgHr|null,
+ *            rpe|null, intervals|null, note|null }
+ * type — ключ из RUN_TYPES (analytics.js)
+ */
+
+function addRun(state, input) {
+  const run = {
+    id: genId('run'),
+    date: input.date || new Date().toISOString(),
+    type: input.type,
+    distanceKm: Number(input.distanceKm),
+    durationSec: Math.round(Number(input.durationSec)),
+    avgHr: input.avgHr ? Number(input.avgHr) : null,
+    rpe: input.rpe ? Number(input.rpe) : null,
+    intervals: input.intervals || null,
+    note: input.note || null,
+  };
+  if (!run.type) throw new Error('Нужен тип пробежки');
+  if (!(run.distanceKm > 0) || !(run.durationSec > 0)) throw new Error('Некорректные дистанция/время');
+  return { state: { ...state, runs: [...(state.runs || []), run] }, run };
+}
+
+function deleteRun(state, runId) {
+  return { ...state, runs: (state.runs || []).filter((r) => r.id !== runId) };
+}
+
 /* ---------- пользовательские упражнения ---------- */
 
 function addCustomExercise(state, ex) {
@@ -333,5 +363,6 @@ if (typeof module !== 'undefined') {
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
+    addRun, deleteRun,
   };
 }

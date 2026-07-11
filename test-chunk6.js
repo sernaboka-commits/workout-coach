@@ -33,12 +33,13 @@ t('все модули заинлайнены', () => {
     'function initWorkout',  // ui-workout
     'function initProgram',  // ui-program
     'function initAnalytics',// ui-analytics
+    'function initRun',      // ui-run
     'function initApp',      // app
   ];
   for (const m of markers) assert(html.includes(m), 'нет модуля: ' + m);
 });
 t('точки монтирования всех экранов присутствуют', () => {
-  ['workout-root', 'program-root', 'analytics-root', 'settings-root'].forEach((id) =>
+  ['workout-root', 'run-root', 'program-root', 'analytics-root', 'settings-root'].forEach((id) =>
     assert(html.includes('id="' + id + '"'), 'нет ' + id));
 });
 t('экспортные блоки node не ломают браузер (обёрнуты в typeof module)', () => {

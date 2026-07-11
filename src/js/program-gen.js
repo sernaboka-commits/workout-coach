@@ -54,17 +54,17 @@ const GEN_GOALS = {
 const GEN_POOLS = {
   // фулбади: 3 ротации, каждая группа 2–3×/нед; день = компаунд-анкер → стретч-работа
   fullA: ['bb-squat', 'bb-bench-press', 'lat-pulldown', 'romanian-dl', 'lateral-raise', 'overhead-ext', 'hanging-leg-raise'],
-  fullB: ['romanian-dl', 'incline-db-press', 'seated-cable-row', 'leg-extension', 'cable-lateral', 'db-curl', 'calf-raise'],
+  fullB: ['romanian-dl', 'incline-db-press', 'seated-cable-row', 'leg-extension', 'cable-lateral', 'incline-db-curl', 'calf-raise'],
   fullC: ['leg-press', 'incline-bb-press', 'pull-up', 'hip-thrust', 'pec-deck', 'skull-crusher', 'cable-crunch'],
   // верх/низ (первые ~6 сбалансированы по группам, чтобы день не «плыл» при урезании времени)
-  upper:  ['bb-bench-press', 'lat-pulldown', 'incline-db-press', 'seated-cable-row', 'ohp', 'overhead-ext', 'lateral-raise', 'db-curl', 'face-pull'],
-  lower:  ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'bulgarian-split', 'leg-extension', 'hip-thrust', 'calf-raise'],
-  upper2: ['incline-db-press', 'pull-up', 'db-shoulder-press', 'bb-row', 'skull-crusher', 'lateral-raise', 'pec-deck', 'hammer-curl', 'rear-delt-fly'],
-  lower2: ['front-squat', 'romanian-dl', 'bulgarian-split', 'leg-curl', 'walking-lunge', 'leg-extension', 'hip-thrust', 'calf-raise'],
+  upper:  ['bb-bench-press', 'lat-pulldown', 'incline-db-press', 'seated-cable-row', 'ohp', 'overhead-ext', 'lateral-raise', 'incline-db-curl', 'face-pull'],
+  lower:  ['bb-squat', 'romanian-dl', 'leg-press', 'seated-leg-curl', 'bulgarian-split', 'leg-extension', 'hip-thrust', 'calf-raise'],
+  upper2: ['incline-db-press', 'pull-up', 'db-shoulder-press', 'chest-supported-row', 'skull-crusher', 'lateral-raise', 'pec-deck', 'cable-curl-behind', 'rear-delt-fly'],
+  lower2: ['front-squat', 'romanian-dl', 'bulgarian-split', 'seated-leg-curl', 'walking-lunge', 'leg-extension', 'hip-thrust', 'abductor-machine', 'calf-raise'],
   // пуш/пул/ноги
   push: ['bb-bench-press', 'incline-db-press', 'ohp', 'overhead-ext', 'lateral-raise', 'pec-deck', 'cable-lateral', 'db-shoulder-press', 'cable-pushdown'],
-  pull: ['pull-up', 'bb-row', 'seated-cable-row', 'db-curl', 'face-pull', 'lat-pulldown', 'hammer-curl', 'straight-arm-pd', 'rear-delt-fly'],
-  legs: ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'bulgarian-split', 'hip-thrust', 'leg-extension', 'calf-raise'],
+  pull: ['pull-up', 'bb-row', 'seated-cable-row', 'incline-db-curl', 'face-pull', 'lat-pulldown', 'hammer-curl', 'straight-arm-pd', 'rear-delt-fly'],
+  legs: ['bb-squat', 'romanian-dl', 'hack-squat', 'seated-leg-curl', 'bulgarian-split', 'hip-thrust', 'leg-extension', 'calf-raise'],
 };
 
 /* упражнения с нагрузкой в растянутой позиции — приоритет отбора (Wolf 2025) */
@@ -72,6 +72,12 @@ const GEN_STRETCH = new Set([
   'incline-db-press', 'incline-bb-press', 'db-bench-press', 'pec-deck', 'cable-fly', 'db-fly',
   'romanian-dl', 'deadlift', 'leg-curl', 'bulgarian-split', 'walking-lunge', 'leg-press',
   'overhead-ext', 'skull-crusher', 'cable-lateral', 'straight-arm-pd', 'pull-up', 'lat-pulldown',
+  // добавлено по данным 2021–2026
+  'seated-leg-curl',    // Maeo 2021: сидя > лёжа (хамстринг растянут у бедра)
+  'hack-squat',         // глубокая амплитуда, квадрицепс в растяжении
+  'incline-db-curl',    // длинная головка бицепса растянута
+  'cable-curl-behind',  // «байесовские» сгибания — то же, на блоке
+  'db-pullover',        // грудь/широчайшие в глубокой растяжке
 ]);
 
 const GEN_LABELS = {
@@ -81,8 +87,8 @@ const GEN_LABELS = {
 };
 
 /* акценты по полу: сдвигают приоритет отбора, когда время ограничено */
-const GEN_F_BOOST = ['hip-thrust', 'romanian-dl', 'bulgarian-split', 'leg-curl', 'leg-press', 'walking-lunge', 'calf-raise', 'hyperextension', 'lateral-raise', 'cable-lateral'];
-const GEN_M_BOOST = ['bb-bench-press', 'incline-db-press', 'ohp', 'bb-curl', 'hammer-curl', 'cable-pushdown', 'overhead-ext', 'lateral-raise'];
+const GEN_F_BOOST = ['hip-thrust', 'romanian-dl', 'bulgarian-split', 'leg-curl', 'seated-leg-curl', 'leg-press', 'walking-lunge', 'calf-raise', 'hyperextension', 'lateral-raise', 'cable-lateral', 'abductor-machine', 'adductor-machine', 'cable-kickback'];
+const GEN_M_BOOST = ['bb-bench-press', 'incline-db-press', 'ohp', 'bb-curl', 'hammer-curl', 'incline-db-curl', 'cable-pushdown', 'overhead-ext', 'lateral-raise'];
 
 /* ---------- выбор сплита ---------- */
 

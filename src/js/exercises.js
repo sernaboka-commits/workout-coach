@@ -67,6 +67,22 @@ const EXERCISE_LIBRARY = [
   { id: 'skull-crusher',       name: 'Французский жим лёжа',           primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
   { id: 'close-grip-bench',    name: 'Жим узким хватом',               primaryMuscle: 'arms',  secondaryMuscles: ['chest', 'shoulders'], kind: 'compound', weightStep: 2.5 },
 
+  // ---- Дополнение по исследованиям 2021–2026 ----
+  // seated-leg-curl: Maeo 2021 — сгибания СИДЯ (бедро согнуто → хамстринг растянут) растят лучше, чем лёжа
+  // hack-squat: глубокая амплитуда, квадрицепс в растяжении под нагрузкой
+  // incline-db-curl / cable-curl-behind: плечо разогнуто → длинная головка бицепса растянута
+  // chest-supported-row: высокий стимул при низкой системной усталости (без нагрузки на поясницу)
+  { id: 'hack-squat',          name: 'Гакк-приседания',                primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'compound',  weightStep: 5 },
+  { id: 'seated-leg-curl',     name: 'Сгибание ног сидя',              primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'adductor-machine',    name: 'Сведение ног в тренажёре',       primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'abductor-machine',    name: 'Разведение ног в тренажёре',     primaryMuscle: 'legs',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
+  { id: 'cable-kickback',      name: 'Отведение ноги в кроссовере',    primaryMuscle: 'legs',  secondaryMuscles: ['core'],              kind: 'isolation', weightStep: 2.5 },
+  { id: 'chest-supported-row', name: 'Тяга в упоре грудью',            primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2.5 },
+  { id: 'db-pullover',         name: 'Пуловер с гантелью',             primaryMuscle: 'chest', secondaryMuscles: ['back'],              kind: 'isolation', weightStep: 2 },
+  { id: 'machine-shoulder-press', name: 'Жим в тренажёре на плечи',    primaryMuscle: 'shoulders', secondaryMuscles: ['arms'],          kind: 'compound',  weightStep: 5 },
+  { id: 'incline-db-curl',     name: 'Бицепс на наклонной скамье',     primaryMuscle: 'arms',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
+  { id: 'cable-curl-behind',   name: 'Бицепс в кроссовере из-за спины', primaryMuscle: 'arms', secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
+
   // ---- Кор ----
   { id: 'plank',               name: 'Планка (с отягощением)',         primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
   { id: 'cable-crunch',        name: 'Скручивания на блоке',           primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },

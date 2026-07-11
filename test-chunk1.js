@@ -16,8 +16,8 @@ const t = (name, fn) => {
 const assert = (cond, msg) => { if (!cond) throw new Error(msg || 'assert'); };
 
 console.log('— библиотека упражнений —');
-t('50 упражнений в библиотеке', () => assert(ex.EXERCISE_LIBRARY.length === 50, 'len=' + ex.EXERCISE_LIBRARY.length));
-t('id уникальны', () => assert(new Set(ex.EXERCISE_LIBRARY.map(e => e.id)).size === 50));
+t('60 упражнений в библиотеке', () => assert(ex.EXERCISE_LIBRARY.length === 60, 'len=' + ex.EXERCISE_LIBRARY.length));
+t('id уникальны', () => assert(new Set(ex.EXERCISE_LIBRARY.map(e => e.id)).size === 60));
 t('все 6 мышечных групп покрыты', () => {
   const groups = new Set(ex.EXERCISE_LIBRARY.map(e => e.primaryMuscle));
   assert(groups.size === 6, [...groups].join(','));
@@ -30,11 +30,20 @@ t('поиск: "жим" + фильтр chest', () => {
 
 console.log('— store: жизненный цикл —');
 let state = store.load(ex.EXERCISE_LIBRARY);
-t('load без данных -> дефолтное состояние', () => assert(state.sessions.length === 0 && state.exercises.length === 50));
+t('load без данных -> дефолтное состояние', () => assert(state.sessions.length === 0 && state.exercises.length === 60));
 t('save -> load восстанавливает состояние', () => {
   store.save(state);
   const re = store.load(ex.EXERCISE_LIBRARY);
-  assert(re.schemaVersion === 1 && re.exercises.length === 50);
+  assert(re.schemaVersion === 1 && re.exercises.length === 60);
+});
+t('старое состояние (50 упр.) получает новые из библиотеки, кастомные целы', () => {
+  const old = { ...state, exercises: [...state.exercises.slice(0, 50), { id: 'cx_test', name: 'Своё', primaryMuscle: 'chest', secondaryMuscles: [], kind: 'isolation', weightStep: 2.5, isCustom: true }] };
+  store.save(old);
+  const re = store.load(ex.EXERCISE_LIBRARY);
+  assert(re.exercises.length === 61, 'len=' + re.exercises.length);   // 60 встроенных + 1 своё
+  assert(re.exercises.some((e) => e.id === 'cx_test'), 'потеряли кастомное');
+  assert(re.exercises.some((e) => e.id === 'seated-leg-curl'), 'новое не домержилось');
+  store.save(state);   // восстановить для следующих тестов
 });
 
 console.log('— store: сессия и подходы —');

@@ -57,6 +57,15 @@ function migrate(state) {
 
 /* ---------- load / save ---------- */
 
+/** Домердж встроенной библиотеки: новые упражнения из кода появляются
+ *  и в старых сохранённых состояниях (пользовательские не трогаем). */
+function mergeLibrary(state, exerciseLibrary) {
+  const have = new Set(state.exercises.map((e) => e.id));
+  const missing = (exerciseLibrary || []).filter((e) => !have.has(e.id));
+  if (!missing.length) return state;
+  return { ...state, exercises: [...state.exercises, ...missing.map((e) => ({ ...e, isCustom: false }))] };
+}
+
 function load(exerciseLibrary) {
   let raw = null;
   try { raw = localStorage.getItem(STORAGE_KEY); } catch (_) { /* private mode */ }
@@ -64,7 +73,7 @@ function load(exerciseLibrary) {
   try {
     const parsed = JSON.parse(raw);
     validateState(parsed);
-    return migrate(parsed);
+    return mergeLibrary(migrate(parsed), exerciseLibrary);
   } catch (err) {
     // повреждённое состояние не затираем молча: сохраняем аварийную копию
     try { localStorage.setItem(STORAGE_KEY + '.corrupt', raw); } catch (_) {}
@@ -317,7 +326,7 @@ function deleteCustomExercise(state, id) {
 if (typeof module !== 'undefined') {
   module.exports = {
     STORAGE_KEY, SCHEMA_VERSION,
-    defaultState, load, save, validateState,
+    defaultState, load, save, validateState, mergeLibrary,
     exportBackup, importBackup, backupOverdue,
     startSession, logSet, updateSet, deleteSet,
     exerciseHistory, genId,

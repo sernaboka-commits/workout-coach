@@ -217,6 +217,10 @@ html, body {
 .sum-advice.lv-sets   { border-left-color: var(--cal); }
 .sum-advice.lv-reduce { border-left-color: var(--danger); }
 .sum-advice.lv-hold   { border-left-color: var(--warn); }
+/* беговые рычаги */
+.sum-advice.lv-distance { border-left-color: var(--ok); }
+.sum-advice.lv-duration { border-left-color: var(--ok); }
+.sum-advice.lv-pace     { border-left-color: var(--danger); }
 
 .mini {
   border: 0; background: transparent; color: var(--muted); font-size: 16px;

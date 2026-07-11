@@ -109,5 +109,36 @@ t('rampWarning: >10% роста при базе ≥5 км', () => {
   assert(an.rampWarning(3, 10) === false);    // база мала — не пугаем
 });
 
+console.log('— runTypeAdvice: прогрессия по типам —');
+const R = (type, km, min, extra = {}) => ({ type, distanceKm: km, durationSec: min * 60, ...extra });
+const CFG = { hrMax: 190 };   // Z1≤114,Z2≤133,Z3≤152,Z4≤171,Z5≤190
+t('лёгкий в норме (Z2) → +дистанция ~10%', () => {
+  const a = an.runTypeAdvice(R('easy', 8, 45, { avgHr: 130 }), CFG);
+  assert(a.lever === 'distance' && /8→8\.8/.test(a.text), JSON.stringify(a));
+});
+t('лёгкий улетел в Z4 → медленнее (pace)', () => {
+  const a = an.runTypeAdvice(R('easy', 8, 40, { avgHr: 165 }), CFG);
+  assert(a.lever === 'pace' && /медленнее/.test(a.text), JSON.stringify(a));
+});
+t('длинный в норме → +длительность', () => {
+  const a = an.runTypeAdvice(R('long', 16, 90, { avgHr: 145 }), CFG);
+  assert(a.lever === 'duration' && /км|мин/.test(a.text), JSON.stringify(a));
+});
+t('темповый в норме → +время; слишком жёстко (Z5) → hold', () => {
+  assert(an.runTypeAdvice(R('tempo', 7, 35, { avgHr: 150 }), CFG).lever === 'duration');
+  assert(an.runTypeAdvice(R('tempo', 7, 35, { avgHr: 185 }), CFG).lever === 'hold');
+});
+t('интервалы в норме → +отрезок; RPE 10 → hold', () => {
+  assert(an.runTypeAdvice(R('interval', 6, 32, { avgHr: 168 }), CFG).lever === 'reps');
+  assert(an.runTypeAdvice(R('interval', 6, 32, { rpe: 10 }), CFG).lever === 'hold');
+});
+t('восстановительный → hold (не растим)', () => {
+  assert(an.runTypeAdvice(R('recovery', 5, 30, { avgHr: 120 }), CFG).lever === 'hold');
+});
+t('без пульса — работает по RPE (лёгкий RPE 8 → медленнее)', () => {
+  const a = an.runTypeAdvice(R('easy', 8, 45, { rpe: 8 }), {});
+  assert(a.lever === 'pace', JSON.stringify(a));   // RPE8→Z4 > цель лёгкого
+});
+
 console.log(`\nИтог: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

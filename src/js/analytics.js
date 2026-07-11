@@ -280,6 +280,66 @@ function zoneAdvice(type, zone) {
   return '';
 }
 
+/**
+ * Интенсивность пробежки как номер зоны 1–5: по пульсу (если есть),
+ * иначе по RPE, иначе null.
+ */
+function intensityZone(run, cfg) {
+  if (run.avgHr && cfg && cfg.hrMax) { const z = hrZoneFor(run.avgHr, cfg); if (z) return z; }
+  if (run.rpe) { const r = Number(run.rpe); return r <= 4 ? 2 : r <= 6 ? 3 : r <= 8 ? 4 : 5; }
+  return null;
+}
+
+/**
+ * Рекомендация на СЛЕДУЮЩУЮ пробежку этого типа — один рычаг.
+ * Методология: Дэниелс (типы), Сейлер 80/20 (лёгкое — реально лёгким),
+ * прогрессия объёма ~10%/нед, интервалы — рост отрезков/темпа.
+ * → { lever:'distance'|'duration'|'reps'|'pace'|'hold', text } | null
+ */
+function runTypeAdvice(run, cfg) {
+  if (!run || !RUN_TYPES[run.type]) return null;
+  const type = run.type;
+  const km = Number(run.distanceKm);
+  const min = Math.round(Number(run.durationSec) / 60);
+  const zone = intensityZone(run, cfg);
+  const [, hi] = RUN_ZONE_TARGET[type];
+  const tooHard = (zone != null && zone > hi) || (run.rpe != null && Number(run.rpe) >= 9);
+  const newKm = Math.round(km * 1.1 * 10) / 10;
+  const zTxt = zone != null ? ` (Z${zone})` : '';
+
+  if (type === 'recovery') {
+    return tooHard
+      ? { lever: 'pace', text: `пульс был высоковат${zTxt} — в след. раз медленнее, это восстановление (Z1–Z2)` }
+      : { lever: 'hold', text: `держи коротко и очень легко — восстановительные не прогрессируют по нагрузке` };
+  }
+  if (type === 'easy') {
+    return tooHard
+      ? { lever: 'pace', text: `лёгкий ушёл в Z${zone} — в след. раз медленнее (Z1–Z2), дистанция та же` }
+      : { lever: 'distance', text: `темп ок — добавь ~10% дистанции (${km}→${newKm} км), не ускоряясь` };
+  }
+  if (type === 'long') {
+    return tooHard
+      ? { lever: 'pace', text: `длинный шёл быстровато${zTxt} — в след. раз спокойнее, аэробно` }
+      : { lever: 'duration', text: `выносливость: +1–2 км или +5–10 мин (сейчас ${km} км / ${min} мин), темп лёгкий` };
+  }
+  if (type === 'tempo') {
+    return tooHard
+      ? { lever: 'hold', text: `было жёстко${zTxt} — повтори тот же темп/время, пока не ускоряйся` }
+      : { lever: 'duration', text: `порог: добавь ~5 мин у порога или чуть быстрее (сейчас ${min} мин)` };
+  }
+  if (type === 'interval') {
+    return tooHard
+      ? { lever: 'hold', text: `было очень тяжело — повтори тот же объём отрезков` }
+      : { lever: 'reps', text: `МПК: добавь 1 отрезок или сократи отдых, темп держи` };
+  }
+  if (type === 'reps') {
+    return tooHard
+      ? { lever: 'hold', text: `держи качество скорости — повтори тот же объём` }
+      : { lever: 'reps', text: `добавь 1 ускорение при ПОЛНОМ восстановлении — следи за скоростью, не усталостью` };
+  }
+  return null;
+}
+
 /* ---------- календарь тренировок (силовые + бег на одной сетке) ---------- */
 
 const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -331,6 +391,7 @@ if (typeof module !== 'undefined') {
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
     HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
+    intensityZone, runTypeAdvice,
     WEEKDAY_SHORT, monthGrid,
   };
 }

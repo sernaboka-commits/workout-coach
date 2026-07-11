@@ -13,7 +13,7 @@ function initRun(root, opts = {}) {
   const St = opts.store || { save, addRun, deleteRun };
   const An = opts.analytics || {
     RUN_TYPES, fmtPace, paceSecKm, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
-    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
+    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice, runTypeAdvice,
   };
 
   function hrCfg() {
@@ -73,6 +73,8 @@ function initRun(root, opts = {}) {
           ${ramp ? '<div class="cx-err" style="margin-top:8px">⚠ Объём прошлой недели вырос >10% к позапрошлой — следи за восстановлением (правило ~10%).</div>' : ''}
         </section>
 
+        ${progressionCardHtml()}
+
         ${zonesCardHtml()}
 
         <section class="an-card">
@@ -93,6 +95,30 @@ function initRun(root, opts = {}) {
 
     drawVolume(root.querySelector('#run-vol'), An.runWeeklySeries(state, { weeks: 8 }));
     drawPace(root.querySelector('#run-pace'), An.easyPaceSeries(state));
+  }
+
+  function progressionCardHtml() {
+    const cfg = hrCfg();
+    // последняя пробежка каждого типа
+    const byType = {};
+    for (const r of (state.runs || [])) {
+      if (!byType[r.type] || new Date(r.date) > new Date(byType[r.type].date)) byType[r.type] = r;
+    }
+    const order = Object.keys(An.RUN_TYPES).filter((k) => byType[k]);
+    if (!order.length) return '';
+    const rows = order.map((k) => {
+      const r = byType[k];
+      const adv = An.runTypeAdvice(r, cfg);
+      const pace = An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec));
+      return `<div class="sum-ex">
+        <div class="sum-row"><span>${An.RUN_TYPES[k].label}</span><small>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}</small></div>
+        ${adv ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<section class="an-card">
+      <div class="an-head"><b>Прогрессия по типам</b><small>рекомендация на след. пробежку</small></div>
+      ${rows}
+    </section>`;
   }
 
   function zonesCardHtml() {

@@ -242,9 +242,21 @@ function mapDay(state, dayId, fn) {
   return { ...state, program: { ...state.program, days } };
 }
 
-function addDay(state, { label } = {}) {
-  const day = { id: genId('day'), label: label || nextDayLabel(state.program.days), items: [] };
+function addDay(state, { label, weekday = null } = {}) {
+  const day = {
+    id: genId('day'),
+    label: label || nextDayLabel(state.program.days),
+    weekday: weekday == null ? null : Number(weekday),   // 0=Пн … 6=Вс
+    items: [],
+  };
   return { state: { ...state, program: { ...state.program, days: [...state.program.days, day] } }, day };
+}
+
+/** Правка самого дня (метка, день недели). */
+function updateDay(state, dayId, patch) {
+  const allowed = ['label', 'weekday'];
+  const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
+  return mapDay(state, dayId, (d) => ({ ...d, ...clean }));
 }
 
 function deleteDay(state, dayId) {
@@ -309,7 +321,7 @@ if (typeof module !== 'undefined') {
     exportBackup, importBackup, backupOverdue,
     startSession, logSet, updateSet, deleteSet,
     exerciseHistory, genId,
-    nextDayLabel, addDay, deleteDay,
+    nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
   };

@@ -50,7 +50,7 @@ function seedProgramIfEmpty(state) {
 function initProgram(root, opts = {}) {
   const St = opts.store || {
     load, save, searchExercises, getExercise,
-    addDay, deleteDay, addDayItem, updateDayItem, removeDayItem, moveDayItem,
+    addDay, updateDay, deleteDay, addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
   };
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
@@ -60,13 +60,18 @@ function initProgram(root, opts = {}) {
   let state = opts.state || St.load(lib());
   let picker = null;   // { dayId } когда открыт выбор упражнения
   let query = '', muscle = null, customOpen = false;
+  let wiz = { count: 3, days: [] };   // мастер создания программы
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
   function render() {
     const days = state.program.days;
-    const daysHtml = days.map((d) => dayCard(d)).join('') ||
-      '<div class="placeholder">Нет дней. Добавьте первый.</div>';
+    // программы нет → мастер: кол-во тренировок → дни недели → создать
+    if (!days.length) {
+      root.innerHTML = `<div class="prog-screen">${wizardHtml()}</div>`;
+      return;
+    }
+    const daysHtml = days.map((d) => dayCard(d)).join('');
     root.innerHTML = `
       <div class="prog-screen">
         <div class="prog-top">
@@ -76,6 +81,23 @@ function initProgram(root, opts = {}) {
         ${daysHtml}
       </div>
       ${picker ? pickerHtml() : ''}`;
+  }
+
+  function wizardHtml() {
+    const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    const picked = wiz.days.length;
+    return `
+      <div class="wk-title" style="padding:6px 4px 12px">Новая программа</div>
+      <section class="day-card">
+        <div class="wiz-step"><b>1.</b> Сколько тренировок в неделю?</div>
+        <div class="chips">${[2, 3, 4, 5].map((n) =>
+          `<button class="chip${wiz.count === n ? ' on' : ''}" data-act="wiz-count" data-n="${n}">${n}</button>`).join('')}</div>
+        <div class="wiz-step"><b>2.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
+        <div class="chips">${wd.map((label, i) =>
+          `<button class="chip${wiz.days.includes(i) ? ' on' : ''}" data-act="wiz-wd" data-wd="${i}">${label}</button>`).join('')}</div>
+        <button class="btn" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать программу</button>
+        <div class="meso-hint">Дни получат метки A${wiz.count > 1 ? ', B' : ''}${wiz.count > 2 ? ', C…' : ''} — упражнения добавишь на следующем шаге.</div>
+      </section>`;
   }
 
   function dayCard(d) {
@@ -101,15 +123,20 @@ function initProgram(root, opts = {}) {
         </div>`;
     }).join('') || '<div class="pi-empty">Пусто — добавьте упражнение.</div>';
 
+    const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    const wdChips = wd.map((label, i) =>
+      `<button class="chip wd${d.weekday === i ? ' on' : ''}" data-act="set-wd" data-day="${d.id}" data-wd="${i}">${label}</button>`).join('');
+
     return `
       <section class="day-card">
         <div class="day-head">
-          <div class="day-label">День ${d.label}</div>
+          <div class="day-label">День ${d.label}${d.weekday != null ? ' · ' + wd[d.weekday] : ''}</div>
           <div>
             <button class="btn sm" data-act="add-item" data-day="${d.id}">+ упражнение</button>
             <button class="mini" data-act="del-day" data-day="${d.id}">🗑</button>
           </div>
         </div>
+        <div class="chips wd-row">${wdChips}</div>
         ${items}
       </section>`;
   }
@@ -169,6 +196,28 @@ function initProgram(root, opts = {}) {
     const dayId = btn.dataset.day, idx = btn.dataset.idx != null ? +btn.dataset.idx : null;
 
     switch (act) {
+      case 'wiz-count': wiz.count = +btn.dataset.n; wiz.days = wiz.days.slice(0, wiz.count); render(); break;
+      case 'wiz-wd': {
+        const w = +btn.dataset.wd;
+        if (wiz.days.includes(w)) wiz.days = wiz.days.filter((x) => x !== w);
+        else if (wiz.days.length < wiz.count) wiz.days = [...wiz.days, w];
+        render(); break;
+      }
+      case 'wiz-create': {
+        if (wiz.days.length !== wiz.count) break;
+        let next = state;
+        for (const w of [...wiz.days].sort((a, b) => a - b)) {
+          const r = St.addDay(next, { weekday: w });
+          next = r.state;
+        }
+        persist(next); break;
+      }
+      case 'set-wd': {
+        const cur = state.program.days.find((d) => d.id === dayId);
+        const w = +btn.dataset.wd;
+        persist(St.updateDay(state, dayId, { weekday: cur && cur.weekday === w ? null : w }));
+        break;
+      }
       case 'add-day': { const r = St.addDay(state); persist(r.state); break; }
       case 'del-day': { if (confirmDel('Удалить день?')) persist(St.deleteDay(state, dayId)); break; }
       case 'rm-item': persist(St.removeDayItem(state, dayId, idx)); break;

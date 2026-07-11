@@ -68,6 +68,32 @@ html, body {
 .nav button .ico { font-size: 20px; line-height: 1; }
 .nav button.active { color: var(--accent); }
 
+/* --- вкладки дней недели на экране тренировки --- */
+.day-tabs {
+  display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 10px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.day-tabs::-webkit-scrollbar { display: none; }
+.day-tab {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); border-radius: 999px; padding: 10px 16px;
+  font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.day-tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* --- «прошлый раз» на карточке упражнения --- */
+.prev-line {
+  color: var(--muted); font-size: 13px; margin: 8px 0 0;
+  padding: 8px 10px; background: var(--surface-2); border-radius: 10px;
+}
+
+/* --- мастер создания программы --- */
+.wiz-step { font-size: 15px; margin: 6px 2px 10px; }
+.wiz-step small { color: var(--muted); }
+.chip.wd { padding: 8px 10px; min-width: 44px; text-align: center; }
+.wd-row { margin: 2px 0 10px; }
+.btn[disabled] { opacity: .45; cursor: default; }
+
 /* --- шапка тренировки --- */
 .wk-head {
   display: flex; align-items: center; justify-content: space-between;

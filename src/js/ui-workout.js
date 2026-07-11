@@ -27,6 +27,20 @@ function demoDayA() {
   };
 }
 
+/* ---------- дни недели ---------- */
+
+const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];   // индекс 0=Пн … 6=Вс
+
+/** JS getDay() (0=Вс) → наш индекс (0=Пн). */
+function todayIdx(now = new Date()) {
+  return (now.getDay() + 6) % 7;
+}
+
+/** День программы, назначенный на этот день недели (или null). */
+function pickDayForDate(days, idx) {
+  return (days || []).find((d) => d.weekday === idx) || null;
+}
+
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
 /** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
@@ -41,6 +55,11 @@ function entryField(exId, field, label, value, p, step, mode, min, max) {
       <button class="step" data-act="${p}+" data-ex="${exId}">+</button>
     </div>
   </div>`;
+}
+
+/** Краткий текст результатов сессии: "60×10 RIR2, 60×9 RIR2". */
+function setsText(sets) {
+  return sets.map((s) => `${s.weight}×${s.reps}${s.rir != null ? ' RIR' + s.rir : ''}`).join(', ');
 }
 
 /** Секунды → "m:ss". */
@@ -149,17 +168,38 @@ function initWorkout(root, opts = {}) {
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
-  const day = opts.day || (state.program.days && state.program.days[0]) || demoDayA();
+  const allDays = (state.program.days && state.program.days.length) ? state.program.days : null;
   const meso = E.mesoStatus(state);
 
-  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
-  let session = null;      // иначе ленивая: создаётся при первом залоге
-  const today = new Date().toISOString().slice(0, 10);
-  const resumed = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today);
-  if (resumed) session = resumed;
+  // программы нет → подсказка вместо экрана
+  if (!allDays && !opts.day) {
+    root.innerHTML = `<div class="placeholder">Программы пока нет.<br>Создай её во вкладке <b>«Программа»</b>: количество тренировок → дни недели → упражнения.</div>`;
+    return { render: () => {}, stopRest: () => {} };
+  }
 
+  // день по умолчанию: назначенный на сегодня день недели, иначе первый
+  let day = opts.day || pickDayForDate(allDays, todayIdx()) || allDays[0];
+
+  let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   let timer = null;        // { endTs, restSec, handle }
+
+  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
+  function resumeSession() {
+    const today = new Date().toISOString().slice(0, 10);
+    session = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today) || null;
+  }
+  resumeSession();
+
+  function setDay(dayId) {
+    const d = (allDays || []).find((x) => x.id === dayId);
+    if (!d || d === day) return;
+    day = d;
+    stopRest(false); timer = null;
+    for (const k of Object.keys(drafts)) delete drafts[k];
+    resumeSession();
+    render();
+  }
 
   function ensureSession() {
     if (!session) {
@@ -200,10 +240,21 @@ function initWorkout(root, opts = {}) {
   function render() {
     const prog = dayProgress(day, liveSession().sets);
     const parts = [];
+
+    // переключатель дней (если их больше одного); сегодняшний помечается
+    if (allDays && allDays.length > 1) {
+      const tIdx = todayIdx();
+      parts.push(`<div class="day-tabs">${allDays.map((d) => `
+        <button class="day-tab${d.id === day.id ? ' on' : ''}" data-act="switch-day" data-day="${d.id}">
+          ${d.label}${d.weekday != null ? ' · ' + WEEKDAYS[d.weekday] : ''}${d.weekday === tIdx ? ' ●' : ''}
+        </button>`).join('')}</div>`);
+    }
+
+    const wd = day.weekday != null ? ' · ' + WEEKDAYS[day.weekday] : '';
     parts.push(`
       <header class="wk-head">
         <div>
-          <div class="wk-title">День ${day.label} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
+          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
           <div class="wk-sub">Цель недели: RIR ${meso.targetRIR}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
@@ -224,11 +275,21 @@ function initWorkout(root, opts = {}) {
           <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
         </div>`).join('');
 
+      // прошлая сессия по этому упражнению (без калибровочных)
+      const hist = S.exerciseHistory(state, item.exerciseId, { limit: 2 })
+        .filter((h) => !h.sets.some((s) => logged.some((l) => l.id === s.id)))[0];
+      const prevLine = hist
+        ? `<div class="prev-line">Прошлый раз (${String(hist.date).slice(0, 10)}): ${setsText(hist.sets)}</div>`
+        : '';
+
       let active = '';
       if (plan.mode !== 'done') {
         const d = ensureDraft(item, plan);
+        const recVals = plan.rec && plan.rec.weight != null
+          ? `<b>Рекомендация: ${plan.rec.weight} кг × ${plan.rec.reps} · RIR ${plan.rec.targetRIR}</b><br>`
+          : '';
         active = `
-          <div class="rec-line">${plan.rec ? plan.rec.reason : ''}</div>
+          <div class="rec-line">${recVals}${plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
             ${entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null)}
             ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
@@ -243,6 +304,7 @@ function initWorkout(root, opts = {}) {
             <div class="ex-name">${ex.name} ${badge}</div>
             <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}</div>
           </div>
+          ${prevLine}
           ${rows}
           ${active}
         </section>`);
@@ -304,6 +366,7 @@ function initWorkout(root, opts = {}) {
     const act = btn.dataset.act;
     const exId = btn.dataset.ex;
 
+    if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
     if (act === 'undo') { removeSet(btn.dataset.set); return; }
@@ -408,5 +471,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText,
   };
 }

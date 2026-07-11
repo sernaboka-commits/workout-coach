@@ -81,6 +81,32 @@ html, body {
 .nav button .ico { font-size: 20px; line-height: 1; }
 .nav button.active { color: var(--accent); }
 
+/* --- вкладки дней недели на экране тренировки --- */
+.day-tabs {
+  display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 10px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.day-tabs::-webkit-scrollbar { display: none; }
+.day-tab {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); border-radius: 999px; padding: 10px 16px;
+  font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.day-tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* --- «прошлый раз» на карточке упражнения --- */
+.prev-line {
+  color: var(--muted); font-size: 13px; margin: 8px 0 0;
+  padding: 8px 10px; background: var(--surface-2); border-radius: 10px;
+}
+
+/* --- мастер создания программы --- */
+.wiz-step { font-size: 15px; margin: 6px 2px 10px; }
+.wiz-step small { color: var(--muted); }
+.chip.wd { padding: 8px 10px; min-width: 44px; text-align: center; }
+.wd-row { margin: 2px 0 10px; }
+.btn[disabled] { opacity: .45; cursor: default; }
+
 /* --- шапка тренировки --- */
 .wk-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -710,9 +736,21 @@ function mapDay(state, dayId, fn) {
   return { ...state, program: { ...state.program, days } };
 }
 
-function addDay(state, { label } = {}) {
-  const day = { id: genId('day'), label: label || nextDayLabel(state.program.days), items: [] };
+function addDay(state, { label, weekday = null } = {}) {
+  const day = {
+    id: genId('day'),
+    label: label || nextDayLabel(state.program.days),
+    weekday: weekday == null ? null : Number(weekday),   // 0=Пн … 6=Вс
+    items: [],
+  };
   return { state: { ...state, program: { ...state.program, days: [...state.program.days, day] } }, day };
+}
+
+/** Правка самого дня (метка, день недели). */
+function updateDay(state, dayId, patch) {
+  const allowed = ['label', 'weekday'];
+  const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
+  return mapDay(state, dayId, (d) => ({ ...d, ...clean }));
 }
 
 function deleteDay(state, dayId) {
@@ -777,7 +815,7 @@ if (typeof module !== 'undefined') {
     exportBackup, importBackup, backupOverdue,
     startSession, logSet, updateSet, deleteSet,
     exerciseHistory, genId,
-    nextDayLabel, addDay, deleteDay,
+    nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
   };
@@ -1246,6 +1284,20 @@ function demoDayA() {
   };
 }
 
+/* ---------- дни недели ---------- */
+
+const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];   // индекс 0=Пн … 6=Вс
+
+/** JS getDay() (0=Вс) → наш индекс (0=Пн). */
+function todayIdx(now = new Date()) {
+  return (now.getDay() + 6) % 7;
+}
+
+/** День программы, назначенный на этот день недели (или null). */
+function pickDayForDate(days, idx) {
+  return (days || []).find((d) => d.weekday === idx) || null;
+}
+
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
 /** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
@@ -1260,6 +1312,11 @@ function entryField(exId, field, label, value, p, step, mode, min, max) {
       <button class="step" data-act="${p}+" data-ex="${exId}">+</button>
     </div>
   </div>`;
+}
+
+/** Краткий текст результатов сессии: "60×10 RIR2, 60×9 RIR2". */
+function setsText(sets) {
+  return sets.map((s) => `${s.weight}×${s.reps}${s.rir != null ? ' RIR' + s.rir : ''}`).join(', ');
 }
 
 /** Секунды → "m:ss". */
@@ -1368,17 +1425,38 @@ function initWorkout(root, opts = {}) {
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
-  const day = opts.day || (state.program.days && state.program.days[0]) || demoDayA();
+  const allDays = (state.program.days && state.program.days.length) ? state.program.days : null;
   const meso = E.mesoStatus(state);
 
-  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
-  let session = null;      // иначе ленивая: создаётся при первом залоге
-  const today = new Date().toISOString().slice(0, 10);
-  const resumed = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today);
-  if (resumed) session = resumed;
+  // программы нет → подсказка вместо экрана
+  if (!allDays && !opts.day) {
+    root.innerHTML = `<div class="placeholder">Программы пока нет.<br>Создай её во вкладке <b>«Программа»</b>: количество тренировок → дни недели → упражнения.</div>`;
+    return { render: () => {}, stopRest: () => {} };
+  }
 
+  // день по умолчанию: назначенный на сегодня день недели, иначе первый
+  let day = opts.day || pickDayForDate(allDays, todayIdx()) || allDays[0];
+
+  let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   let timer = null;        // { endTs, restSec, handle }
+
+  // возобновляем сегодняшнюю сессию этого дня, если она уже начата
+  function resumeSession() {
+    const today = new Date().toISOString().slice(0, 10);
+    session = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today) || null;
+  }
+  resumeSession();
+
+  function setDay(dayId) {
+    const d = (allDays || []).find((x) => x.id === dayId);
+    if (!d || d === day) return;
+    day = d;
+    stopRest(false); timer = null;
+    for (const k of Object.keys(drafts)) delete drafts[k];
+    resumeSession();
+    render();
+  }
 
   function ensureSession() {
     if (!session) {
@@ -1419,10 +1497,21 @@ function initWorkout(root, opts = {}) {
   function render() {
     const prog = dayProgress(day, liveSession().sets);
     const parts = [];
+
+    // переключатель дней (если их больше одного); сегодняшний помечается
+    if (allDays && allDays.length > 1) {
+      const tIdx = todayIdx();
+      parts.push(`<div class="day-tabs">${allDays.map((d) => `
+        <button class="day-tab${d.id === day.id ? ' on' : ''}" data-act="switch-day" data-day="${d.id}">
+          ${d.label}${d.weekday != null ? ' · ' + WEEKDAYS[d.weekday] : ''}${d.weekday === tIdx ? ' ●' : ''}
+        </button>`).join('')}</div>`);
+    }
+
+    const wd = day.weekday != null ? ' · ' + WEEKDAYS[day.weekday] : '';
     parts.push(`
       <header class="wk-head">
         <div>
-          <div class="wk-title">День ${day.label} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
+          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
           <div class="wk-sub">Цель недели: RIR ${meso.targetRIR}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
@@ -1443,11 +1532,21 @@ function initWorkout(root, opts = {}) {
           <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
         </div>`).join('');
 
+      // прошлая сессия по этому упражнению (без калибровочных)
+      const hist = S.exerciseHistory(state, item.exerciseId, { limit: 2 })
+        .filter((h) => !h.sets.some((s) => logged.some((l) => l.id === s.id)))[0];
+      const prevLine = hist
+        ? `<div class="prev-line">Прошлый раз (${String(hist.date).slice(0, 10)}): ${setsText(hist.sets)}</div>`
+        : '';
+
       let active = '';
       if (plan.mode !== 'done') {
         const d = ensureDraft(item, plan);
+        const recVals = plan.rec && plan.rec.weight != null
+          ? `<b>Рекомендация: ${plan.rec.weight} кг × ${plan.rec.reps} · RIR ${plan.rec.targetRIR}</b><br>`
+          : '';
         active = `
-          <div class="rec-line">${plan.rec ? plan.rec.reason : ''}</div>
+          <div class="rec-line">${recVals}${plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
             ${entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null)}
             ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
@@ -1462,6 +1561,7 @@ function initWorkout(root, opts = {}) {
             <div class="ex-name">${ex.name} ${badge}</div>
             <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}</div>
           </div>
+          ${prevLine}
           ${rows}
           ${active}
         </section>`);
@@ -1523,6 +1623,7 @@ function initWorkout(root, opts = {}) {
     const act = btn.dataset.act;
     const exId = btn.dataset.ex;
 
+    if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
     if (act === 'undo') { removeSet(btn.dataset.set); return; }
@@ -1627,6 +1728,7 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText,
   };
 }
 
@@ -1684,7 +1786,7 @@ function seedProgramIfEmpty(state) {
 function initProgram(root, opts = {}) {
   const St = opts.store || {
     load, save, searchExercises, getExercise,
-    addDay, deleteDay, addDayItem, updateDayItem, removeDayItem, moveDayItem,
+    addDay, updateDay, deleteDay, addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
   };
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
@@ -1694,13 +1796,18 @@ function initProgram(root, opts = {}) {
   let state = opts.state || St.load(lib());
   let picker = null;   // { dayId } когда открыт выбор упражнения
   let query = '', muscle = null, customOpen = false;
+  let wiz = { count: 3, days: [] };   // мастер создания программы
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
   function render() {
     const days = state.program.days;
-    const daysHtml = days.map((d) => dayCard(d)).join('') ||
-      '<div class="placeholder">Нет дней. Добавьте первый.</div>';
+    // программы нет → мастер: кол-во тренировок → дни недели → создать
+    if (!days.length) {
+      root.innerHTML = `<div class="prog-screen">${wizardHtml()}</div>`;
+      return;
+    }
+    const daysHtml = days.map((d) => dayCard(d)).join('');
     root.innerHTML = `
       <div class="prog-screen">
         <div class="prog-top">
@@ -1710,6 +1817,23 @@ function initProgram(root, opts = {}) {
         ${daysHtml}
       </div>
       ${picker ? pickerHtml() : ''}`;
+  }
+
+  function wizardHtml() {
+    const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    const picked = wiz.days.length;
+    return `
+      <div class="wk-title" style="padding:6px 4px 12px">Новая программа</div>
+      <section class="day-card">
+        <div class="wiz-step"><b>1.</b> Сколько тренировок в неделю?</div>
+        <div class="chips">${[2, 3, 4, 5].map((n) =>
+          `<button class="chip${wiz.count === n ? ' on' : ''}" data-act="wiz-count" data-n="${n}">${n}</button>`).join('')}</div>
+        <div class="wiz-step"><b>2.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
+        <div class="chips">${wd.map((label, i) =>
+          `<button class="chip${wiz.days.includes(i) ? ' on' : ''}" data-act="wiz-wd" data-wd="${i}">${label}</button>`).join('')}</div>
+        <button class="btn" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать программу</button>
+        <div class="meso-hint">Дни получат метки A${wiz.count > 1 ? ', B' : ''}${wiz.count > 2 ? ', C…' : ''} — упражнения добавишь на следующем шаге.</div>
+      </section>`;
   }
 
   function dayCard(d) {
@@ -1735,15 +1859,20 @@ function initProgram(root, opts = {}) {
         </div>`;
     }).join('') || '<div class="pi-empty">Пусто — добавьте упражнение.</div>';
 
+    const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    const wdChips = wd.map((label, i) =>
+      `<button class="chip wd${d.weekday === i ? ' on' : ''}" data-act="set-wd" data-day="${d.id}" data-wd="${i}">${label}</button>`).join('');
+
     return `
       <section class="day-card">
         <div class="day-head">
-          <div class="day-label">День ${d.label}</div>
+          <div class="day-label">День ${d.label}${d.weekday != null ? ' · ' + wd[d.weekday] : ''}</div>
           <div>
             <button class="btn sm" data-act="add-item" data-day="${d.id}">+ упражнение</button>
             <button class="mini" data-act="del-day" data-day="${d.id}">🗑</button>
           </div>
         </div>
+        <div class="chips wd-row">${wdChips}</div>
         ${items}
       </section>`;
   }
@@ -1803,6 +1932,28 @@ function initProgram(root, opts = {}) {
     const dayId = btn.dataset.day, idx = btn.dataset.idx != null ? +btn.dataset.idx : null;
 
     switch (act) {
+      case 'wiz-count': wiz.count = +btn.dataset.n; wiz.days = wiz.days.slice(0, wiz.count); render(); break;
+      case 'wiz-wd': {
+        const w = +btn.dataset.wd;
+        if (wiz.days.includes(w)) wiz.days = wiz.days.filter((x) => x !== w);
+        else if (wiz.days.length < wiz.count) wiz.days = [...wiz.days, w];
+        render(); break;
+      }
+      case 'wiz-create': {
+        if (wiz.days.length !== wiz.count) break;
+        let next = state;
+        for (const w of [...wiz.days].sort((a, b) => a - b)) {
+          const r = St.addDay(next, { weekday: w });
+          next = r.state;
+        }
+        persist(next); break;
+      }
+      case 'set-wd': {
+        const cur = state.program.days.find((d) => d.id === dayId);
+        const w = +btn.dataset.wd;
+        persist(St.updateDay(state, dayId, { weekday: cur && cur.weekday === w ? null : w }));
+        break;
+      }
       case 'add-day': { const r = St.addDay(state); persist(r.state); break; }
       case 'del-day': { if (confirmDel('Удалить день?')) persist(St.deleteDay(state, dayId)); break; }
       case 'rm-item': persist(St.removeDayItem(state, dayId, idx)); break;
@@ -2200,10 +2351,9 @@ if (typeof module !== 'undefined') {
  * ============================================================ */
 
 function initApp() {
-  // общий state (владелец — app.js)
+  // общий state (владелец — app.js); пустая программа не засевается —
+  // вместо этого экран «Программа» показывает мастер создания
   let state = load(EXERCISE_LIBRARY);
-  const seeded = seedProgramIfEmpty(state);
-  if (seeded !== state) { state = seeded; save(state); }
 
   // экраны сообщают об изменениях сюда — держим один объект state
   const onCommit = (next) => { state = next; };

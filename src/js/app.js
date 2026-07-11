@@ -7,10 +7,9 @@
  * ============================================================ */
 
 function initApp() {
-  // общий state (владелец — app.js)
+  // общий state (владелец — app.js); пустая программа не засевается —
+  // вместо этого экран «Программа» показывает мастер создания
   let state = load(EXERCISE_LIBRARY);
-  const seeded = seedProgramIfEmpty(state);
-  if (seeded !== state) { state = seeded; save(state); }
 
   // экраны сообщают об изменениях сюда — держим один объект state
   const onCommit = (next) => { state = next; };

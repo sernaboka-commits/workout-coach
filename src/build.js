@@ -27,6 +27,12 @@ function build() {
   fs.mkdirSync(distDir, { recursive: true });
   const outPath = path.join(distDir, 'index.html');
   fs.writeFileSync(outPath, html);
+
+  // копия для GitHub Pages (раздаёт только корень или /docs)
+  const docsDir = path.join(srcDir, '..', 'docs');
+  fs.mkdirSync(docsDir, { recursive: true });
+  fs.writeFileSync(path.join(docsDir, 'index.html'), html);
+
   return outPath;
 }
 

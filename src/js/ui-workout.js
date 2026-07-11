@@ -187,7 +187,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps };
+  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -351,8 +351,20 @@ function initWorkout(root, opts = {}) {
       const min = Math.max(1, Math.round((Date.now() - startMs) / 60000));
       dur = min < 60 ? `${min} мин` : `${Math.floor(min / 60)} ч ${min % 60} мин`;
     }
-    const rows = sum.exercises.map((e) =>
-      `<div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : (e.calib ? ' · только калибровка' : '')}</small></div>`).join('');
+    const growWeek = !meso.isDeload;
+    const rows = sum.exercises.map((e) => {
+      const item = day.items.find((i) => i.exerciseId === e.exerciseId);
+      const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
+      const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
+      const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek }) : null;
+      const advHtml = adv
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
+        : (e.calib ? '<div class="sum-advice lv-hold">След. раз: рабочие подходы → пойдут рекомендации по весу</div>' : '');
+      return `<div class="sum-ex">
+        <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : ''}</small></div>
+        ${advHtml}
+      </div>`;
+    }).join('');
     return `
       <div class="overlay">
         <div class="sheet">
@@ -363,7 +375,7 @@ function initWorkout(root, opts = {}) {
             <div class="sum-stat"><b>${dur}</b><small>длительность</small></div>
           </div>
           <div class="sum-list">${rows || '<div class="pi-empty">Нет подходов.</div>'}</div>
-          <div class="meso-hint">Данные уже в памяти телефона — можно закрывать. В след. раз по этим упражнениям будут рекомендации по весу и RIR.</div>
+          <div class="meso-hint">Рекомендация «След. раз» — один рычаг прогрессии на упражнение (вес / повторы / подходы) по твоим результатам. Данные уже сохранены.</div>
           <button class="log-wide" data-act="close-summary">Готово</button>
         </div>
       </div>`;

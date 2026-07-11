@@ -221,6 +221,18 @@ html, body {
 .sum-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
 .sum-row span { font-weight: 600; }
 .sum-row small { color: var(--muted); text-align: right; }
+.sum-ex { margin-bottom: 6px; }
+.sum-advice {
+  font-size: 12.5px; color: var(--muted); padding: 7px 10px; margin-top: 3px;
+  background: var(--surface); border-radius: 8px; border-left: 3px solid var(--muted);
+}
+.sum-advice b { color: var(--text); }
+.sum-vol { color: var(--cal); }
+.sum-advice.lv-weight { border-left-color: var(--ok); }
+.sum-advice.lv-reps   { border-left-color: var(--accent); }
+.sum-advice.lv-sets   { border-left-color: var(--cal); }
+.sum-advice.lv-reduce { border-left-color: var(--danger); }
+.sum-advice.lv-hold   { border-left-color: var(--warn); }
 
 .mini {
   border: 0; background: transparent; color: var(--muted); font-size: 16px;
@@ -1079,6 +1091,55 @@ function summarize(sets) {
   };
 }
 
+/**
+ * Рекомендация на СЛЕДУЮЩУЮ тренировку по одному упражнению — какой один
+ * рычаг двигать (вес / повторы / подходы), для гипертрофии.
+ * Методология: двойная прогрессия (Helms/Nippard) + прогрессия объёма
+ * MEV→MRV (Israetel/RP) + автрегуляция по RIR.
+ * sets — рабочие сеты завершённой сессии по этому упражнению.
+ * → { lever:'weight'|'reps'|'sets'|'hold'|'reduce', text, volume } | null
+ */
+function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
+  const work = (sets || []).filter((s) => !s.isCalibration);
+  if (!work.length) return null;
+  const step = opts.weightStep || 2.5;
+  const cap = opts.setsCap || 5;
+  const grow = opts.growWeek !== false;            // не перед делоудом
+
+  const weight = Math.max(...work.map((s) => Number(s.weight)));
+  const atW = work.filter((s) => Number(s.weight) === weight);
+  const topReps = Math.max(...atW.map((s) => Number(s.reps)));
+  const minRIR = Math.min(...atW.map((s) => (s.rir == null ? targetRIR : Number(s.rir))));
+  const failCount = work.filter((s) => s.rir != null && Number(s.rir) <= 0).length;
+  const nSets = work.length;
+
+  let lever, text;
+  if (failCount >= 2) {
+    lever = 'reduce';
+    text = `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй`;
+  } else if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+    lever = 'weight';
+    text = `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})`;
+  } else if (minRIR >= targetRIR) {
+    lever = 'reps';
+    const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
+    text = `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})`;
+  } else if (topReps < item.repRangeMin) {
+    lever = 'reduce';
+    text = `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг`;
+  } else {
+    lever = 'hold';
+    text = `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}`;
+  }
+
+  // объём — вторичный рычаг: только при запасе восстановления и не у потолка подходов
+  let volume = null;
+  if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (lever === 'reps' || lever === 'hold')) {
+    volume = `или прибавь 1 рабочий подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+  }
+  return { lever, text, volume };
+}
+
 /* ---------- мезоцикл ---------- */
 
 function mesoStatus(state) {
@@ -1261,6 +1322,7 @@ if (typeof module !== 'undefined') {
     roundToStep,
     epley1rm,
     projectReps,
+    nextSessionAdvice,
     targetRIRForWeek,
     mesoStatus,
     advanceWeek,
@@ -1979,7 +2041,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps };
+  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -2143,8 +2205,20 @@ function initWorkout(root, opts = {}) {
       const min = Math.max(1, Math.round((Date.now() - startMs) / 60000));
       dur = min < 60 ? `${min} мин` : `${Math.floor(min / 60)} ч ${min % 60} мин`;
     }
-    const rows = sum.exercises.map((e) =>
-      `<div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : (e.calib ? ' · только калибровка' : '')}</small></div>`).join('');
+    const growWeek = !meso.isDeload;
+    const rows = sum.exercises.map((e) => {
+      const item = day.items.find((i) => i.exerciseId === e.exerciseId);
+      const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
+      const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
+      const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek }) : null;
+      const advHtml = adv
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
+        : (e.calib ? '<div class="sum-advice lv-hold">След. раз: рабочие подходы → пойдут рекомендации по весу</div>' : '');
+      return `<div class="sum-ex">
+        <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : ''}</small></div>
+        ${advHtml}
+      </div>`;
+    }).join('');
     return `
       <div class="overlay">
         <div class="sheet">
@@ -2155,7 +2229,7 @@ function initWorkout(root, opts = {}) {
             <div class="sum-stat"><b>${dur}</b><small>длительность</small></div>
           </div>
           <div class="sum-list">${rows || '<div class="pi-empty">Нет подходов.</div>'}</div>
-          <div class="meso-hint">Данные уже в памяти телефона — можно закрывать. В след. раз по этим упражнениям будут рекомендации по весу и RIR.</div>
+          <div class="meso-hint">Рекомендация «След. раз» — один рычаг прогрессии на упражнение (вес / повторы / подходы) по твоим результатам. Данные уже сохранены.</div>
           <button class="log-wide" data-act="close-summary">Готово</button>
         </div>
       </div>`;

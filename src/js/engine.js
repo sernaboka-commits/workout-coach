@@ -73,6 +73,55 @@ function summarize(sets) {
   };
 }
 
+/**
+ * Рекомендация на СЛЕДУЮЩУЮ тренировку по одному упражнению — какой один
+ * рычаг двигать (вес / повторы / подходы), для гипертрофии.
+ * Методология: двойная прогрессия (Helms/Nippard) + прогрессия объёма
+ * MEV→MRV (Israetel/RP) + автрегуляция по RIR.
+ * sets — рабочие сеты завершённой сессии по этому упражнению.
+ * → { lever:'weight'|'reps'|'sets'|'hold'|'reduce', text, volume } | null
+ */
+function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
+  const work = (sets || []).filter((s) => !s.isCalibration);
+  if (!work.length) return null;
+  const step = opts.weightStep || 2.5;
+  const cap = opts.setsCap || 5;
+  const grow = opts.growWeek !== false;            // не перед делоудом
+
+  const weight = Math.max(...work.map((s) => Number(s.weight)));
+  const atW = work.filter((s) => Number(s.weight) === weight);
+  const topReps = Math.max(...atW.map((s) => Number(s.reps)));
+  const minRIR = Math.min(...atW.map((s) => (s.rir == null ? targetRIR : Number(s.rir))));
+  const failCount = work.filter((s) => s.rir != null && Number(s.rir) <= 0).length;
+  const nSets = work.length;
+
+  let lever, text;
+  if (failCount >= 2) {
+    lever = 'reduce';
+    text = `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй`;
+  } else if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+    lever = 'weight';
+    text = `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})`;
+  } else if (minRIR >= targetRIR) {
+    lever = 'reps';
+    const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
+    text = `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})`;
+  } else if (topReps < item.repRangeMin) {
+    lever = 'reduce';
+    text = `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг`;
+  } else {
+    lever = 'hold';
+    text = `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}`;
+  }
+
+  // объём — вторичный рычаг: только при запасе восстановления и не у потолка подходов
+  let volume = null;
+  if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (lever === 'reps' || lever === 'hold')) {
+    volume = `или прибавь 1 рабочий подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+  }
+  return { lever, text, volume };
+}
+
 /* ---------- мезоцикл ---------- */
 
 function mesoStatus(state) {
@@ -255,6 +304,7 @@ if (typeof module !== 'undefined') {
     roundToStep,
     epley1rm,
     projectReps,
+    nextSessionAdvice,
     targetRIRForWeek,
     mesoStatus,
     advanceWeek,

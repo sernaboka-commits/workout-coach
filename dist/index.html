@@ -114,15 +114,48 @@ html, body {
   background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
 }
 .stepper .step:active { background: var(--line); }
-.stepper .val { flex: 1; text-align: center; padding: 4px 2px; }
+.stepper .val { flex: 1; text-align: center; padding: 4px 2px; display: block; }
 .stepper .val b { display: block; font-size: 19px; }
 .stepper .val small { color: var(--muted); font-size: 10.5px; }
+
+/* редактируемые поля ввода вместо статичных чисел */
+.val-in, .ms-in {
+  display: block; width: 100%; box-sizing: border-box; padding: 0;
+  background: transparent; border: 0; color: var(--text);
+  text-align: center; font-family: inherit; font-weight: 600;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.val-in { font-size: 19px; }         /* ≥16px — iOS не зумит при фокусе */
+.ms-in { font-size: 16px; }
+.val-in:focus, .ms-in:focus { outline: none; color: var(--accent); }
+.val-in::-webkit-outer-spin-button, .val-in::-webkit-inner-spin-button,
+.ms-in::-webkit-outer-spin-button, .ms-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .log {
   min-width: var(--tap); height: var(--tap); border: 0; border-radius: 12px;
   background: var(--accent); color: #fff; font-size: 24px; font-weight: 700; cursor: pointer;
 }
 .log:active { background: var(--accent-2); }
+
+/* --- ввод подхода: подпись + [−][поле][+] на всю ширину (простор для ручного ввода) --- */
+.entry { margin-top: 8px; }
+.ef { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.ef-lbl { flex: 0 0 92px; color: var(--muted); font-size: 13px; }
+.ef-ctrl {
+  display: flex; align-items: center; flex: 1; min-width: 0;
+  background: var(--surface-2); border-radius: 12px; overflow: hidden;
+}
+.ef-ctrl .step {
+  flex: 0 0 auto; min-width: 52px; height: 52px; border: 0; cursor: pointer;
+  background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
+}
+.ef-ctrl .step:active { background: var(--line); }
+.ef-ctrl .val-in { flex: 1; min-width: 0; font-size: 20px; }
+.log-wide {
+  width: 100%; height: 54px; margin-top: 12px; border: 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer;
+}
+.log-wide:active { background: var(--accent-2); }
 
 .mini {
   border: 0; background: transparent; color: var(--muted); font-size: 16px;
@@ -181,14 +214,14 @@ html, body {
 .pi-params { display: flex; gap: 6px; flex-wrap: wrap; }
 .mstep {
   display: flex; align-items: center; background: var(--surface);
-  border-radius: 10px; overflow: hidden; flex: 1; min-width: 92px;
+  border-radius: 10px; overflow: hidden; flex: 1 1 108px; min-width: 108px;
 }
 .ms-btn {
-  min-width: 40px; height: 48px; border: 0; background: transparent;
+  flex: 0 0 auto; min-width: 34px; height: 48px; border: 0; background: transparent;
   color: var(--text); font-size: 22px; cursor: pointer;
 }
 .ms-btn:active { background: var(--line); }
-.ms-val { flex: 1; text-align: center; }
+.ms-val { flex: 1; min-width: 0; text-align: center; }
 .ms-val b { display: block; font-size: 16px; }
 .ms-val small { color: var(--muted); font-size: 9.5px; }
 
@@ -1194,6 +1227,20 @@ function demoDayA() {
 
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
+/** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
+function entryField(exId, field, label, value, p, step, mode, min, max) {
+  const mn = min != null ? ` min="${min}"` : '';
+  const mx = max != null ? ` max="${max}"` : '';
+  return `<div class="ef">
+    <span class="ef-lbl">${label}</span>
+    <div class="ef-ctrl">
+      <button class="step" data-act="${p}-" data-ex="${exId}">−</button>
+      <input class="val-in" type="number" inputmode="${mode}" step="${step}"${mn}${mx} data-field="${field}" data-ex="${exId}" value="${value}">
+      <button class="step" data-act="${p}+" data-ex="${exId}">+</button>
+    </div>
+  </div>`;
+}
+
 /** Секунды → "m:ss". */
 function fmtClock(sec) {
   const s = Math.max(0, Math.round(sec));
@@ -1380,23 +1427,11 @@ function initWorkout(root, opts = {}) {
         const d = ensureDraft(item, plan);
         active = `
           <div class="rec-line">${plan.rec ? plan.rec.reason : ''}</div>
-          <div class="set-row active" data-ex="${item.exerciseId}">
-            <div class="stepper">
-              <button class="step" data-act="w-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.weight}</b><small>кг</small></div>
-              <button class="step" data-act="w+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <div class="stepper">
-              <button class="step" data-act="r-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.reps}</b><small>повт</small></div>
-              <button class="step" data-act="r+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <div class="stepper">
-              <button class="step" data-act="i-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.rir}</b><small>RIR</small></div>
-              <button class="step" data-act="i+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <button class="log" data-act="log" data-ex="${item.exerciseId}">✓</button>
+          <div class="entry" data-ex="${item.exerciseId}">
+            ${entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null)}
+            ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
+            ${entryField(item.exerciseId, 'rir', 'RIR (в запасе)', d.rir, 'i', 1, 'numeric', 0, 5)}
+            <button class="log-wide" data-act="log" data-ex="${item.exerciseId}">✓ Записать подход</button>
           </div>`;
       }
 
@@ -1429,17 +1464,28 @@ function initWorkout(root, opts = {}) {
   }
 
   /* --- таймер отдыха --- */
+  // перерисовываем только полоску таймера, а не весь экран —
+  // иначе ручной ввод в поле стирается каждые 250мс
+  function paintTimer() {
+    const bar = root.querySelector('.rest-bar');
+    if (!timer || !bar) { render(); return; }
+    const rem = computeRemaining(timer.endTs, Date.now());
+    const over = rem <= 0;
+    const pct = Math.round((1 - rem / timer.restSec) * 100);
+    bar.classList.toggle('over', over);
+    const fill = bar.querySelector('.rest-fill'); if (fill) fill.style.width = Math.min(100, pct) + '%';
+    const txt = bar.querySelector('.rest-txt'); if (txt) txt.textContent = over ? 'Отдых окончен' : 'Отдых ' + fmtClock(rem);
+    const skip = bar.querySelector('.rest-skip'); if (skip) skip.textContent = over ? 'Ок' : 'Пропустить';
+  }
+
   function startRest(restSec) {
     stopRest(false);
-    timer = { endTs: Date.now() + restSec * 1000, restSec, handle: null };
+    timer = { endTs: Date.now() + restSec * 1000, restSec, handle: null, dinged: false };
     timer.handle = setInterval(() => {
       const rem = computeRemaining(timer.endTs, Date.now());
-      if (rem <= 0) {
-        clearInterval(timer.handle);
-        timer.handle = null;
-        beep(); buzz();
-      }
-      render();
+      if (rem <= 0 && !timer.dinged) { timer.dinged = true; beep(); buzz(); }
+      if (rem <= 0) { clearInterval(timer.handle); timer.handle = null; }
+      paintTimer();
     }, 250);
     render();
   }
@@ -1474,6 +1520,31 @@ function initWorkout(root, opts = {}) {
     else if (act === 'i+') d.rir = clampStep(d.rir, +1, 1, 0, 5);
     else if (act === 'log') { logCurrent(item, d); return; }
     render();
+  });
+
+  // ручной ввод: пока печатают — обновляем черновик без render (не теряем каретку)
+  root.addEventListener('input', (e) => {
+    const inp = e.target.closest('.val-in');
+    if (!inp) return;
+    const d = drafts[inp.dataset.ex];
+    if (!d) return;
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) d[inp.dataset.field] = v;
+  });
+  // по завершении ввода — клампим и показываем очищенное значение (без render)
+  root.addEventListener('change', (e) => {
+    const inp = e.target.closest('.val-in');
+    if (!inp) return;
+    const d = drafts[inp.dataset.ex];
+    if (!d) return;
+    const f = inp.dataset.field;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = f === 'reps' ? 1 : 0;
+    if (f === 'weight') v = Math.max(0, v);
+    else if (f === 'reps') v = Math.max(1, Math.round(v));
+    else if (f === 'rir') v = Math.min(5, Math.max(0, Math.round(v)));
+    d[f] = v;
+    inp.value = v;
   });
 
   function logCurrent(item, d) {
@@ -1660,7 +1731,7 @@ function initProgram(root, opts = {}) {
     return `
       <div class="mstep" data-field="${field}">
         <button class="ms-btn" data-act="p-" data-day="${dayId}" data-idx="${idx}" data-field="${field}">−</button>
-        <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+        <label class="ms-val"><input class="ms-in" type="number" inputmode="numeric" data-day="${dayId}" data-idx="${idx}" data-field="${field}" value="${value}"><small>${label}</small></label>
         <button class="ms-btn" data-act="p+" data-day="${dayId}" data-idx="${idx}" data-field="${field}">+</button>
       </div>`;
   }
@@ -1743,6 +1814,26 @@ function initProgram(root, opts = {}) {
            </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
       }
     }
+  });
+
+  // ручной ввод параметров дня: коммитим по завершении ввода (без render — не ломаем каретку/клики)
+  root.addEventListener('change', (e) => {
+    const inp = e.target.closest('.ms-in');
+    if (!inp) return;
+    const dayId = inp.dataset.day, idx = +inp.dataset.idx, field = inp.dataset.field;
+    const day = state.program.days.find((d) => d.id === dayId);
+    const it = day && day.items[idx];
+    if (!it) return;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = it[field];
+    const min = field === 'restSec' ? 0 : field === 'targetRIR' ? 0 : 1;
+    v = Math.max(min, Math.round(v));
+    if (field === 'targetRIR') v = Math.min(5, v);
+    if (field === 'repRangeMin') v = Math.min(v, it.repRangeMax);
+    if (field === 'repRangeMax') v = Math.max(v, it.repRangeMin);
+    state = St.updateDayItem(state, dayId, idx, { [field]: v });
+    St.save(state); onCommit(state);
+    inp.value = v;
   });
 
   function stepParam(dayId, idx, field, dir) {
@@ -1957,7 +2048,7 @@ function initAnalytics(root, opts = {}) {
   function eStep(field, value, label) {
     return `<div class="mstep" data-field="${field}">
       <button class="ms-btn" data-act="e-" data-field="${field}">−</button>
-      <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+      <label class="ms-val"><input class="ms-in" type="number" inputmode="decimal" data-field="${field}" value="${value}"><small>${label}</small></label>
       <button class="ms-btn" data-act="e+" data-field="${field}">+</button>
     </div>`;
   }
@@ -2026,8 +2117,24 @@ function initAnalytics(root, opts = {}) {
   }
 
   /* --- события --- */
+  // ручной ввод при правке сета — обновляем draft без render (не теряем каретку)
+  root.addEventListener('input', (e) => {
+    const inp = e.target.closest('.ms-in');
+    if (!inp || !draft) return;
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) draft[inp.dataset.field] = v;
+  });
   root.addEventListener('change', (e) => {
-    if (e.target.id === 'an-ex') { selEx = e.target.value; drawCharts(); }
+    if (e.target.id === 'an-ex') { selEx = e.target.value; drawCharts(); return; }
+    const inp = e.target.closest('.ms-in');
+    if (!inp || !draft) return;
+    const f = inp.dataset.field;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = draft[f];
+    if (f === 'weight') v = Math.max(0, v);
+    else if (f === 'reps') v = Math.max(1, Math.round(v));
+    else if (f === 'rir') v = Math.min(5, Math.max(0, Math.round(v)));
+    draft[f] = v; inp.value = v;
   });
   root.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-act]'); if (!btn) return;

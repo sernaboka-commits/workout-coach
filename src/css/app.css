@@ -106,15 +106,48 @@ html, body {
   background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
 }
 .stepper .step:active { background: var(--line); }
-.stepper .val { flex: 1; text-align: center; padding: 4px 2px; }
+.stepper .val { flex: 1; text-align: center; padding: 4px 2px; display: block; }
 .stepper .val b { display: block; font-size: 19px; }
 .stepper .val small { color: var(--muted); font-size: 10.5px; }
+
+/* редактируемые поля ввода вместо статичных чисел */
+.val-in, .ms-in {
+  display: block; width: 100%; box-sizing: border-box; padding: 0;
+  background: transparent; border: 0; color: var(--text);
+  text-align: center; font-family: inherit; font-weight: 600;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.val-in { font-size: 19px; }         /* ≥16px — iOS не зумит при фокусе */
+.ms-in { font-size: 16px; }
+.val-in:focus, .ms-in:focus { outline: none; color: var(--accent); }
+.val-in::-webkit-outer-spin-button, .val-in::-webkit-inner-spin-button,
+.ms-in::-webkit-outer-spin-button, .ms-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .log {
   min-width: var(--tap); height: var(--tap); border: 0; border-radius: 12px;
   background: var(--accent); color: #fff; font-size: 24px; font-weight: 700; cursor: pointer;
 }
 .log:active { background: var(--accent-2); }
+
+/* --- ввод подхода: подпись + [−][поле][+] на всю ширину (простор для ручного ввода) --- */
+.entry { margin-top: 8px; }
+.ef { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.ef-lbl { flex: 0 0 92px; color: var(--muted); font-size: 13px; }
+.ef-ctrl {
+  display: flex; align-items: center; flex: 1; min-width: 0;
+  background: var(--surface-2); border-radius: 12px; overflow: hidden;
+}
+.ef-ctrl .step {
+  flex: 0 0 auto; min-width: 52px; height: 52px; border: 0; cursor: pointer;
+  background: transparent; color: var(--text); font-size: 26px; font-weight: 600;
+}
+.ef-ctrl .step:active { background: var(--line); }
+.ef-ctrl .val-in { flex: 1; min-width: 0; font-size: 20px; }
+.log-wide {
+  width: 100%; height: 54px; margin-top: 12px; border: 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer;
+}
+.log-wide:active { background: var(--accent-2); }
 
 .mini {
   border: 0; background: transparent; color: var(--muted); font-size: 16px;
@@ -173,14 +206,14 @@ html, body {
 .pi-params { display: flex; gap: 6px; flex-wrap: wrap; }
 .mstep {
   display: flex; align-items: center; background: var(--surface);
-  border-radius: 10px; overflow: hidden; flex: 1; min-width: 92px;
+  border-radius: 10px; overflow: hidden; flex: 1 1 108px; min-width: 108px;
 }
 .ms-btn {
-  min-width: 40px; height: 48px; border: 0; background: transparent;
+  flex: 0 0 auto; min-width: 34px; height: 48px; border: 0; background: transparent;
   color: var(--text); font-size: 22px; cursor: pointer;
 }
 .ms-btn:active { background: var(--line); }
-.ms-val { flex: 1; text-align: center; }
+.ms-val { flex: 1; min-width: 0; text-align: center; }
 .ms-val b { display: block; font-size: 16px; }
 .ms-val small { color: var(--muted); font-size: 9.5px; }
 

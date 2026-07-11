@@ -158,7 +158,7 @@ function initAnalytics(root, opts = {}) {
   function eStep(field, value, label) {
     return `<div class="mstep" data-field="${field}">
       <button class="ms-btn" data-act="e-" data-field="${field}">−</button>
-      <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+      <label class="ms-val"><input class="ms-in" type="number" inputmode="decimal" data-field="${field}" value="${value}"><small>${label}</small></label>
       <button class="ms-btn" data-act="e+" data-field="${field}">+</button>
     </div>`;
   }
@@ -227,8 +227,24 @@ function initAnalytics(root, opts = {}) {
   }
 
   /* --- события --- */
+  // ручной ввод при правке сета — обновляем draft без render (не теряем каретку)
+  root.addEventListener('input', (e) => {
+    const inp = e.target.closest('.ms-in');
+    if (!inp || !draft) return;
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) draft[inp.dataset.field] = v;
+  });
   root.addEventListener('change', (e) => {
-    if (e.target.id === 'an-ex') { selEx = e.target.value; drawCharts(); }
+    if (e.target.id === 'an-ex') { selEx = e.target.value; drawCharts(); return; }
+    const inp = e.target.closest('.ms-in');
+    if (!inp || !draft) return;
+    const f = inp.dataset.field;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = draft[f];
+    if (f === 'weight') v = Math.max(0, v);
+    else if (f === 'reps') v = Math.max(1, Math.round(v));
+    else if (f === 'rir') v = Math.min(5, Math.max(0, Math.round(v)));
+    draft[f] = v; inp.value = v;
   });
   root.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-act]'); if (!btn) return;

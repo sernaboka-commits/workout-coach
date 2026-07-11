@@ -118,7 +118,7 @@ function initProgram(root, opts = {}) {
     return `
       <div class="mstep" data-field="${field}">
         <button class="ms-btn" data-act="p-" data-day="${dayId}" data-idx="${idx}" data-field="${field}">−</button>
-        <div class="ms-val"><b>${value}</b><small>${label}</small></div>
+        <label class="ms-val"><input class="ms-in" type="number" inputmode="numeric" data-day="${dayId}" data-idx="${idx}" data-field="${field}" value="${value}"><small>${label}</small></label>
         <button class="ms-btn" data-act="p+" data-day="${dayId}" data-idx="${idx}" data-field="${field}">+</button>
       </div>`;
   }
@@ -201,6 +201,26 @@ function initProgram(root, opts = {}) {
            </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
       }
     }
+  });
+
+  // ручной ввод параметров дня: коммитим по завершении ввода (без render — не ломаем каретку/клики)
+  root.addEventListener('change', (e) => {
+    const inp = e.target.closest('.ms-in');
+    if (!inp) return;
+    const dayId = inp.dataset.day, idx = +inp.dataset.idx, field = inp.dataset.field;
+    const day = state.program.days.find((d) => d.id === dayId);
+    const it = day && day.items[idx];
+    if (!it) return;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = it[field];
+    const min = field === 'restSec' ? 0 : field === 'targetRIR' ? 0 : 1;
+    v = Math.max(min, Math.round(v));
+    if (field === 'targetRIR') v = Math.min(5, v);
+    if (field === 'repRangeMin') v = Math.min(v, it.repRangeMax);
+    if (field === 'repRangeMax') v = Math.max(v, it.repRangeMin);
+    state = St.updateDayItem(state, dayId, idx, { [field]: v });
+    St.save(state); onCommit(state);
+    inp.value = v;
   });
 
   function stepParam(dayId, idx, field, dir) {

@@ -29,6 +29,20 @@ function demoDayA() {
 
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
+/** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
+function entryField(exId, field, label, value, p, step, mode, min, max) {
+  const mn = min != null ? ` min="${min}"` : '';
+  const mx = max != null ? ` max="${max}"` : '';
+  return `<div class="ef">
+    <span class="ef-lbl">${label}</span>
+    <div class="ef-ctrl">
+      <button class="step" data-act="${p}-" data-ex="${exId}">−</button>
+      <input class="val-in" type="number" inputmode="${mode}" step="${step}"${mn}${mx} data-field="${field}" data-ex="${exId}" value="${value}">
+      <button class="step" data-act="${p}+" data-ex="${exId}">+</button>
+    </div>
+  </div>`;
+}
+
 /** Секунды → "m:ss". */
 function fmtClock(sec) {
   const s = Math.max(0, Math.round(sec));
@@ -215,23 +229,11 @@ function initWorkout(root, opts = {}) {
         const d = ensureDraft(item, plan);
         active = `
           <div class="rec-line">${plan.rec ? plan.rec.reason : ''}</div>
-          <div class="set-row active" data-ex="${item.exerciseId}">
-            <div class="stepper">
-              <button class="step" data-act="w-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.weight}</b><small>кг</small></div>
-              <button class="step" data-act="w+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <div class="stepper">
-              <button class="step" data-act="r-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.reps}</b><small>повт</small></div>
-              <button class="step" data-act="r+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <div class="stepper">
-              <button class="step" data-act="i-" data-ex="${item.exerciseId}">−</button>
-              <div class="val"><b>${d.rir}</b><small>RIR</small></div>
-              <button class="step" data-act="i+" data-ex="${item.exerciseId}">+</button>
-            </div>
-            <button class="log" data-act="log" data-ex="${item.exerciseId}">✓</button>
+          <div class="entry" data-ex="${item.exerciseId}">
+            ${entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null)}
+            ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
+            ${entryField(item.exerciseId, 'rir', 'RIR (в запасе)', d.rir, 'i', 1, 'numeric', 0, 5)}
+            <button class="log-wide" data-act="log" data-ex="${item.exerciseId}">✓ Записать подход</button>
           </div>`;
       }
 
@@ -264,17 +266,28 @@ function initWorkout(root, opts = {}) {
   }
 
   /* --- таймер отдыха --- */
+  // перерисовываем только полоску таймера, а не весь экран —
+  // иначе ручной ввод в поле стирается каждые 250мс
+  function paintTimer() {
+    const bar = root.querySelector('.rest-bar');
+    if (!timer || !bar) { render(); return; }
+    const rem = computeRemaining(timer.endTs, Date.now());
+    const over = rem <= 0;
+    const pct = Math.round((1 - rem / timer.restSec) * 100);
+    bar.classList.toggle('over', over);
+    const fill = bar.querySelector('.rest-fill'); if (fill) fill.style.width = Math.min(100, pct) + '%';
+    const txt = bar.querySelector('.rest-txt'); if (txt) txt.textContent = over ? 'Отдых окончен' : 'Отдых ' + fmtClock(rem);
+    const skip = bar.querySelector('.rest-skip'); if (skip) skip.textContent = over ? 'Ок' : 'Пропустить';
+  }
+
   function startRest(restSec) {
     stopRest(false);
-    timer = { endTs: Date.now() + restSec * 1000, restSec, handle: null };
+    timer = { endTs: Date.now() + restSec * 1000, restSec, handle: null, dinged: false };
     timer.handle = setInterval(() => {
       const rem = computeRemaining(timer.endTs, Date.now());
-      if (rem <= 0) {
-        clearInterval(timer.handle);
-        timer.handle = null;
-        beep(); buzz();
-      }
-      render();
+      if (rem <= 0 && !timer.dinged) { timer.dinged = true; beep(); buzz(); }
+      if (rem <= 0) { clearInterval(timer.handle); timer.handle = null; }
+      paintTimer();
     }, 250);
     render();
   }
@@ -309,6 +322,31 @@ function initWorkout(root, opts = {}) {
     else if (act === 'i+') d.rir = clampStep(d.rir, +1, 1, 0, 5);
     else if (act === 'log') { logCurrent(item, d); return; }
     render();
+  });
+
+  // ручной ввод: пока печатают — обновляем черновик без render (не теряем каретку)
+  root.addEventListener('input', (e) => {
+    const inp = e.target.closest('.val-in');
+    if (!inp) return;
+    const d = drafts[inp.dataset.ex];
+    if (!d) return;
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) d[inp.dataset.field] = v;
+  });
+  // по завершении ввода — клампим и показываем очищенное значение (без render)
+  root.addEventListener('change', (e) => {
+    const inp = e.target.closest('.val-in');
+    if (!inp) return;
+    const d = drafts[inp.dataset.ex];
+    if (!d) return;
+    const f = inp.dataset.field;
+    let v = parseFloat(inp.value);
+    if (isNaN(v)) v = f === 'reps' ? 1 : 0;
+    if (f === 'weight') v = Math.max(0, v);
+    else if (f === 'reps') v = Math.max(1, Math.round(v));
+    else if (f === 'rir') v = Math.min(5, Math.max(0, Math.round(v)));
+    d[f] = v;
+    inp.value = v;
   });
 
   function logCurrent(item, d) {

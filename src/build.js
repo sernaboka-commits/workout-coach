@@ -28,10 +28,22 @@ function build() {
   const outPath = path.join(distDir, 'index.html');
   fs.writeFileSync(outPath, html);
 
-  // копия для GitHub Pages (раздаёт только корень или /docs)
+  // PWA-ассеты (не инлайнятся: SW и манифест обязаны быть отдельными файлами)
+  const assets = ['manifest.webmanifest', 'sw.js', 'icon-192.png', 'icon-512.png'];
+  const copyAssets = (dir) => {
+    for (const a of assets) {
+      const from = path.join(srcDir, a);
+      if (fs.existsSync(from)) fs.copyFileSync(from, path.join(dir, a));
+    }
+  };
+  copyAssets(distDir);
+
+  // копия для GitHub Pages (/docs)
   const docsDir = path.join(srcDir, '..', 'docs');
   fs.mkdirSync(docsDir, { recursive: true });
   fs.writeFileSync(path.join(docsDir, 'index.html'), html);
+  fs.writeFileSync(path.join(docsDir, '.nojekyll'), '');
+  copyAssets(docsDir);
 
   return outPath;
 }

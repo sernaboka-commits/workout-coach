@@ -9,6 +9,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Тренер">
+  <!-- PWA: установка на домашний экран + офлайн -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>Тренер · силовые</title>
   <style>
 /* ============================================================
@@ -3117,6 +3120,12 @@ function initApp() {
       }
     };
     reader.readAsText(file);
+  }
+
+  // офлайн: регистрируем service worker (только в защищённом контексте — Pages/localhost)
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
+      (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 
   // старт: экран тренировки; мягкое напоминание о бэкапе

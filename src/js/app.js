@@ -116,6 +116,12 @@ function initApp() {
     reader.readAsText(file);
   }
 
+  // офлайн: регистрируем service worker (только в защищённом контексте — Pages/localhost)
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
+      (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+
   // старт: экран тренировки; мягкое напоминание о бэкапе
   show('workout');
   if (backupOverdue(state)) {

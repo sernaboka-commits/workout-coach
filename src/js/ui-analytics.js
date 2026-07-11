@@ -96,6 +96,7 @@ function initAnalytics(root, opts = {}) {
       const marks = [];
       if (c.workoutSets) marks.push('<span class="cal-m wo">🏋️</span>');
       for (const r of c.runs.slice(0, 3)) marks.push(`<span class="cal-dot ${r.hard ? 'hard' : 'easy'}"></span>`);
+      if (c.plannedRun && !c.runs.length) marks.push('<span class="cal-dot plan"></span>');   // плановый бег
       const planned = (!c.workoutSets && c.plannedLabel) ? `<span class="cal-plan">${c.plannedLabel}</span>` : '';
       return `<button class="${cls.join(' ')}" data-act="cal-day" data-date="${c.date}">
         <span class="cal-n">${c.dayNum}</span>${planned}
@@ -113,7 +114,7 @@ function initAnalytics(root, opts = {}) {
           </div>
         </div>
         <div class="cal-grid">${head}${cells}</div>
-        <div class="cal-legend"><span>🏋️ силовая</span><span><i class="cal-dot easy"></i> лёгкий бег</span><span><i class="cal-dot hard"></i> тяжёлый бег</span><span class="cal-plan">A</span> план</div>
+        <div class="cal-legend"><span>🏋️ силовая</span><span><i class="cal-dot easy"></i> лёгкий</span><span><i class="cal-dot hard"></i> тяжёлый</span><span><i class="cal-dot plan"></i> план бега</span><span class="cal-plan">A</span> план зала</div>
         ${calDetailHtml()}
       </section>`;
   }

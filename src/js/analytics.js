@@ -280,6 +280,42 @@ function zoneAdvice(type, zone) {
   return '';
 }
 
+/* Назначение и ориентиры по каждому типу (для цели перед тренировкой). */
+const RUN_TYPE_INFO = {
+  recovery: { zone: [1, 2], rpe: '2–3',  goal: 'Активное восстановление: разгон кровотока между тяжёлыми днями, без нагрузки.', howto: 'Очень легко и коротко, разговорный темп, никаких ускорений.' },
+  easy:     { zone: [1, 3], rpe: '3–4',  goal: 'Аэробная база: капилляры, митохондрии, экономичность — фундамент объёма (80/20).', howto: 'Комфортный разговорный темп. Должно быть легче, чем кажется нужным.' },
+  long:     { zone: [2, 3], rpe: '4–5',  goal: 'Выносливость и жировой обмен: увеличиваем время на ногах.', howto: 'Ровный лёгкий темп, последнюю треть не разгоняйся.' },
+  tempo:    { zone: [3, 4], rpe: '7–8',  goal: 'Лактатный порог (ПАНО): сдвигаем порог — «комфортно тяжело».', howto: '20–40 мин непрерывно или блоки по 8–15 мин у порога.' },
+  interval: { zone: [4, 5], rpe: '8–9',  goal: 'МПК (VO2max): поднимаем аэробный потолок.', howto: 'Отрезки 3–5 мин в Z4–Z5, отдых равный или чуть короче (напр. 5×3 мин).' },
+  reps:     { zone: [4, 5], rpe: '9–10', goal: 'Скорость и экономичность, нейромышечность.', howto: 'Короткие быстрые отрезки (10–30 с) с ПОЛНЫМ восстановлением. Качество, не усталость.' },
+};
+
+/**
+ * Цель на сегодняшнюю пробежку данного типа (перед тренировкой):
+ * назначение, целевая зона/пульс/RPE и конкретный ориентир прогрессии
+ * от прошлой такой пробежки.
+ * → { goal, howto, rpe, zoneLabel, zoneBpm, progress, lever } | null
+ */
+function runTarget(type, lastRun, cfg) {
+  const info = RUN_TYPE_INFO[type];
+  if (!info) return null;
+  const zones = hrZones(cfg);
+  let zoneBpm = null;
+  if (zones) {
+    const lo = zones.find((z) => z.n === info.zone[0]);
+    const hi = zones.find((z) => z.n === info.zone[1]);
+    if (lo && hi) zoneBpm = `${lo.lo}–${hi.hi} уд`;
+  }
+  const adv = lastRun ? runTypeAdvice(lastRun, cfg) : null;
+  return {
+    goal: info.goal, howto: info.howto, rpe: info.rpe,
+    zoneLabel: info.zone[0] === info.zone[1] ? `Z${info.zone[0]}` : `Z${info.zone[0]}–Z${info.zone[1]}`,
+    zoneBpm,
+    progress: adv ? adv.text : 'первая пробежка этого типа — задай базовый ориентир и запиши',
+    lever: adv ? adv.lever : null,
+  };
+}
+
 /**
  * Интенсивность пробежки как номер зоны 1–5: по пульсу (если есть),
  * иначе по RPE, иначе null.
@@ -367,6 +403,7 @@ function monthGrid(state, { year, month }) {
   }
   const plannedByWd = {};
   for (const d of (state.program && state.program.days) || []) if (d.weekday != null) plannedByWd[d.weekday] = d.label;
+  const plannedRunByWd = state.runPlan || {};
 
   const weeks = [];
   for (let w = 0; w < 6; w++) {
@@ -377,7 +414,8 @@ function monthGrid(state, { year, month }) {
       const k = cur.toISOString().slice(0, 10);
       row.push({
         date: k, dayNum: cur.getUTCDate(), inMonth: cur.getUTCMonth() === month,
-        workoutSets: sesByDate[k] || 0, runs: runByDate[k] || [], plannedLabel: plannedByWd[d] || null,
+        workoutSets: sesByDate[k] || 0, runs: runByDate[k] || [],
+        plannedLabel: plannedByWd[d] || null, plannedRun: plannedRunByWd[d] || null,
       });
     }
     weeks.push(row);
@@ -391,7 +429,7 @@ if (typeof module !== 'undefined') {
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
     HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
-    intensityZone, runTypeAdvice,
+    intensityZone, runTypeAdvice, RUN_TYPE_INFO, runTarget,
     WEEKDAY_SHORT, monthGrid,
   };
 }

@@ -33,6 +33,7 @@ function defaultState(exerciseLibrary) {
     program: { days: [] },          // конструктор заполнит A/B/C
     sessions: [],
     runs: [],                       // беговые тренировки (v2)
+    runPlan: {},                    // план бега: weekday(0=Пн..6=Вс) -> тип
     mesocycle: {
       cycleNo: 1,
       weekNo: 1,                    // 1..6 (6 = делоуд при growWeeks=5)
@@ -333,6 +334,13 @@ function deleteRun(state, runId) {
   return { ...state, runs: (state.runs || []).filter((r) => r.id !== runId) };
 }
 
+/** План бега: назначить тип на день недели (пустой type — снять). */
+function setRunPlanDay(state, weekday, type) {
+  const plan = { ...(state.runPlan || {}) };
+  if (!type) delete plan[weekday]; else plan[weekday] = type;
+  return { ...state, runPlan: plan };
+}
+
 /** Правка настроек (числовые поля; пустое → null). */
 function updateSettings(state, patch) {
   const allowed = ['weightStepDefault', 'backupReminderDays', 'age', 'hrMax', 'hrRest'];
@@ -377,6 +385,6 @@ if (typeof module !== 'undefined') {
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
-    addRun, deleteRun, updateSettings,
+    addRun, deleteRun, setRunPlanDay, updateSettings,
   };
 }

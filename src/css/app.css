@@ -409,6 +409,29 @@ html, body {
 .run-f small { color: var(--muted); font-size: 11px; padding-left: 2px; }
 .run-f .in { margin-bottom: 0; padding: 10px 8px; text-align: center; }
 
+/* цель перед пробежкой */
+.plan-today { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin: 4px 0 8px; font-size: 13px; color: var(--muted); }
+.plan-today b { color: var(--accent); }
+.run-target { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 6px 0 10px; border-left: 4px solid var(--accent); }
+.run-target.lv-distance, .run-target.lv-duration { border-left-color: var(--ok); }
+.run-target.lv-pace { border-left-color: var(--danger); }
+.run-target.lv-reps { border-left-color: var(--accent); }
+.run-target.lv-hold { border-left-color: var(--warn); }
+.rt-head { font-size: 13px; margin-bottom: 4px; }
+.rt-goal { color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+.rt-prog { font-size: 13px; }
+.rt-prog b { color: var(--text); }
+.rt-how { color: var(--muted); font-size: 12px; margin-top: 5px; }
+
+/* план недели (бег) */
+.plan-grid { display: flex; flex-direction: column; gap: 6px; }
+.plan-row { display: flex; align-items: center; gap: 10px; }
+.plan-row.on .plan-wd { color: var(--accent); font-weight: 700; }
+.plan-wd { width: 32px; color: var(--muted); font-size: 13px; }
+.plan-row .sel { flex: 1; max-width: none; }
+
+.cal-dot.plan { background: transparent; border: 1.5px solid var(--muted); }
+
 .share-row { display: flex; align-items: center; gap: 10px; }
 .share-bar { flex: 1; height: 14px; background: rgba(55,196,106,.25); border-radius: 999px; overflow: hidden; }
 .share-hard { height: 100%; background: var(--accent); border-radius: 999px 0 0 999px; }

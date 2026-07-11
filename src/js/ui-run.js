@@ -10,10 +10,10 @@
 const RPAL = { line: '#37c46a', hr: '#f0a336', bar: '#4c8dff', warn: '#f0a336', bad: '#ff5d5d', text: '#94a0b0', axis: '#3a4759' };
 
 function initRun(root, opts = {}) {
-  const St = opts.store || { save, addRun, deleteRun };
+  const St = opts.store || { save, addRun, deleteRun, setRunPlanDay };
   const An = opts.analytics || {
     RUN_TYPES, fmtPace, paceSecKm, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
-    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice, runTypeAdvice,
+    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice, runTypeAdvice, runTarget,
   };
 
   function hrCfg() {
@@ -24,9 +24,19 @@ function initRun(root, opts = {}) {
   const onCommit = opts.onCommit || function () {};
   let state = opts.state;
 
+  const WD = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const todayWd = (typeof todayIdx !== 'undefined') ? todayIdx() : ((new Date().getDay() + 6) % 7);
+  const planToday = (state.runPlan || {})[todayWd] || null;   // тип по плану на сегодня
+
   const today = new Date().toISOString().slice(0, 10);
-  const draft = { type: 'easy', date: today, km: '', min: '', sec: '', hr: '', rpe: '', intervals: '', note: '' };
+  const draft = { type: planToday || 'easy', date: today, km: '', min: '', sec: '', hr: '', rpe: '', intervals: '', note: '' };
   let err = '';
+
+  function lastRunOfType(type) {
+    let best = null;
+    for (const r of (state.runs || [])) if (r.type === type && (!best || new Date(r.date) > new Date(best.date))) best = r;
+    return best;
+  }
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -39,6 +49,10 @@ function initRun(root, opts = {}) {
 
     const typeChips = Object.entries(An.RUN_TYPES).map(([k, t]) =>
       `<button class="chip${draft.type === k ? ' on' : ''}" data-act="type" data-v="${k}">${t.label}</button>`).join('');
+    const pt = (state.runPlan || {})[todayWd] || null;
+    const planBanner = pt
+      ? `<div class="plan-today">Сегодня по плану: <b>${An.RUN_TYPES[pt] ? An.RUN_TYPES[pt].label : pt}</b></div>`
+      : '';
 
     root.innerHTML = `
       <div class="an-screen">
@@ -46,7 +60,9 @@ function initRun(root, opts = {}) {
 
         <section class="an-card">
           <div class="an-head"><b>Новая пробежка</b><input class="in short" type="date" id="run-date" value="${draft.date}"></div>
+          ${planBanner}
           <div class="chips">${typeChips}</div>
+          ${targetCardHtml()}
           <div class="run-grid">
             ${numField('km', 'км', draft.km, '0.1', 'напр. 8.5')}
             ${numField('min', 'мин', draft.min, '1', '45')}
@@ -75,6 +91,8 @@ function initRun(root, opts = {}) {
 
         ${progressionCardHtml()}
 
+        ${planCardHtml()}
+
         ${zonesCardHtml()}
 
         <section class="an-card">
@@ -95,6 +113,34 @@ function initRun(root, opts = {}) {
 
     drawVolume(root.querySelector('#run-vol'), An.runWeeklySeries(state, { weeks: 8 }));
     drawPace(root.querySelector('#run-pace'), An.easyPaceSeries(state));
+  }
+
+  function targetCardHtml() {
+    const t = An.runTarget(draft.type, lastRunOfType(draft.type), hrCfg());
+    if (!t) return '';
+    return `<div class="run-target lv-${t.lever || 'hold'}">
+      <div class="rt-head">🎯 Цель · ${An.RUN_TYPES[draft.type].label} · <b>${t.zoneLabel}${t.zoneBpm ? ' (' + t.zoneBpm + ')' : ''}</b> · RPE ${t.rpe}</div>
+      <div class="rt-goal">${t.goal}</div>
+      <div class="rt-prog"><b>Сегодня:</b> ${t.progress}</div>
+      <div class="rt-how">${t.howto}</div>
+    </div>`;
+  }
+
+  function planCardHtml() {
+    const plan = state.runPlan || {};
+    const opts = [['', '—'], ['recovery', 'Восстан.'], ['easy', 'Лёгкий'], ['long', 'Длинный'], ['tempo', 'Темп'], ['interval', 'Интерв.'], ['reps', 'Повторы']];
+    const rows = WD.map((w, i) => `
+      <div class="plan-row${i === todayWd ? ' on' : ''}">
+        <span class="plan-wd">${w}</span>
+        <select class="sel run-plan-sel" data-wd="${i}">
+          ${opts.map(([v, l]) => `<option value="${v}"${(plan[i] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>`).join('');
+    return `<section class="an-card">
+      <div class="an-head"><b>План недели (бег)</b><small>тип по дням</small></div>
+      <div class="plan-grid">${rows}</div>
+      <div class="meso-hint">Назначь тип на день недели — на этот день подставится «сегодня по плану», а в календаре появится метка.</div>
+    </section>`;
   }
 
   function progressionCardHtml() {
@@ -211,6 +257,13 @@ function initRun(root, opts = {}) {
     if (act === 'type') { syncDraft(); draft.type = btn.dataset.v; err = ''; render(); }
     else if (act === 'log-run') logRun();
     else if (act === 'del-run') persist(St.deleteRun(state, btn.dataset.id));
+  });
+
+  // изменение плана бега по дням
+  root.addEventListener('change', (e) => {
+    const sel = e.target.closest('.run-plan-sel');
+    if (!sel) return;
+    persist(St.setRunPlanDay(state, +sel.dataset.wd, sel.value));
   });
 
   function syncDraft() {

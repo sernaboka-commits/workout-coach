@@ -303,6 +303,10 @@ html, body {
 .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .lib-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.lib-head {
+  color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; padding: 10px 2px 2px;
+}
 .lib-row {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   text-align: left; border: 0; background: var(--surface-2); color: var(--text);
@@ -1961,6 +1965,16 @@ if (typeof module !== 'undefined') {
 
 /* ---------- чистые хелперы ---------- */
 
+/** Сортировка библиотеки: группы мышц по порядку, внутри — по алфавиту.
+ *  Так альтернативы на один пучок оказываются рядом. */
+const MUSCLE_ORDER_UI = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+function groupByMuscle(list) {
+  return [...list].sort((a, b) => {
+    const d = MUSCLE_ORDER_UI.indexOf(a.primaryMuscle) - MUSCLE_ORDER_UI.indexOf(b.primaryMuscle);
+    return d !== 0 ? d : a.name.localeCompare(b.name, 'ru');
+  });
+}
+
 /** Дефолтные параметры элемента дня под тип упражнения. */
 function defaultItemFor(ex) {
   const iso = ex.kind === 'isolation';
@@ -2098,6 +2112,7 @@ function initProgram(root, opts = {}) {
           <div class="pi-top">
             <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a></div>
             <div class="pi-ord">
+              <button class="mini" data-act="swap-item" data-day="${d.id}" data-idx="${i}" title="Заменить аналогом">⇄</button>
               <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
               <button class="mini" data-act="down" data-day="${d.id}" data-idx="${i}">↓</button>
               <button class="mini" data-act="rm-item" data-day="${d.id}" data-idx="${i}">✕</button>
@@ -2140,15 +2155,29 @@ function initProgram(root, opts = {}) {
       </div>`;
   }
 
+  /** Список библиотеки: сгруппирован по мышцам, с заголовками секций. */
+  function libListHtml(results) {
+    const sorted = groupByMuscle(results);
+    let lastMuscle = null;
+    const parts = [];
+    for (const e of sorted) {
+      if (e.primaryMuscle !== lastMuscle) {
+        lastMuscle = e.primaryMuscle;
+        parts.push(`<div class="lib-head">${muscleLabels[lastMuscle] || lastMuscle}</div>`);
+      }
+      parts.push(`<button class="lib-row" data-act="pick" data-id="${e.id}">
+         <span>${e.name}${e.isCustom ? ' <span class="badge cal">своё</span>' : ''}</span>
+         <small>${muscleLabels[e.primaryMuscle] || e.primaryMuscle} · ${e.kind === 'compound' ? 'база' : 'изоляция'}</small>
+       </button>`);
+    }
+    return parts.join('') || '<div class="pi-empty">Ничего не найдено.</div>';
+  }
+
   function pickerHtml() {
     const results = St.searchExercises(state, { query, muscle });
     const chips = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core']
       .map((m) => `<button class="chip${muscle === m ? ' on' : ''}" data-act="filter" data-m="${m}">${muscleLabels[m] || m}</button>`).join('');
-    const list = results.map((e) =>
-      `<button class="lib-row" data-act="pick" data-id="${e.id}">
-         <span>${e.name}${e.isCustom ? ' <span class="badge cal">своё</span>' : ''}</span>
-         <small>${muscleLabels[e.primaryMuscle] || e.primaryMuscle} · ${e.kind === 'compound' ? 'база' : 'изоляция'}</small>
-       </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
+    const list = libListHtml(results);
 
     const custom = customOpen ? `
       <div class="custom-form">
@@ -2167,7 +2196,7 @@ function initProgram(root, opts = {}) {
       <div class="overlay" data-act="close-bg">
         <div class="sheet">
           <div class="sheet-head">
-            <b>Выбрать упражнение</b>
+            <b>${picker && picker.replaceIdx != null ? 'Заменить аналогом (та же группа)' : 'Выбрать упражнение'}</b>
             <button class="mini" data-act="close">✕</button>
           </div>
           <input class="in" id="lib-search" placeholder="Поиск…" value="${query}">
@@ -2241,6 +2270,14 @@ function initProgram(root, opts = {}) {
       case 'down': persist(St.moveDayItem(state, dayId, idx, +1)); break;
       case 'p-': case 'p+': stepParam(dayId, idx, btn.dataset.field, act === 'p+' ? +1 : -1); break;
       case 'add-item': picker = { dayId }; query = ''; muscle = null; customOpen = false; render(); break;
+      case 'swap-item': {
+        // замена аналогом: открываем список сразу с фильтром на ту же группу мышц
+        const day = state.program.days.find((d) => d.id === dayId);
+        const cur = day && St.getExercise(state, day.items[idx].exerciseId);
+        picker = { dayId, replaceIdx: idx };
+        query = ''; muscle = cur ? cur.primaryMuscle : null; customOpen = false;
+        render(); break;
+      }
       case 'close': case 'close-bg': if (act === 'close' || e.target.classList.contains('overlay')) { picker = null; customOpen = false; render(); } break;
       case 'filter': muscle = (muscle === btn.dataset.m ? null : btn.dataset.m); render(); break;
       case 'pick': pickExercise(btn.dataset.id); break;
@@ -2257,14 +2294,7 @@ function initProgram(root, opts = {}) {
     if (e.target.id === 'lib-search') {
       query = e.target.value;
       const listEl = root.querySelector('.lib-list');
-      if (listEl) {
-        const results = St.searchExercises(state, { query, muscle });
-        listEl.innerHTML = results.map((ex) =>
-          `<button class="lib-row" data-act="pick" data-id="${ex.id}">
-             <span>${ex.name}${ex.isCustom ? ' <span class="badge cal">своё</span>' : ''}</span>
-             <small>${muscleLabels[ex.primaryMuscle] || ex.primaryMuscle} · ${ex.kind === 'compound' ? 'база' : 'изоляция'}</small>
-           </button>`).join('') || '<div class="pi-empty">Ничего не найдено.</div>';
-      }
+      if (listEl) listEl.innerHTML = libListHtml(St.searchExercises(state, { query, muscle }));
     }
   });
 
@@ -2304,9 +2334,14 @@ function initProgram(root, opts = {}) {
   function pickExercise(exId) {
     const ex = St.getExercise(state, exId);
     if (!ex || !picker) return;
-    const dayId = picker.dayId;
+    const { dayId, replaceIdx } = picker;
     picker = null;                 // закрыть оверлей ДО persist — persist перерисовывает экран
-    persist(St.addDayItem(state, dayId, defaultItemFor(ex)));
+    if (replaceIdx != null) {
+      // замена: упражнение меняется, сеты/повторы/отдых пользователя сохраняются
+      persist(St.updateDayItem(state, dayId, replaceIdx, { exerciseId: exId }));
+    } else {
+      persist(St.addDayItem(state, dayId, defaultItemFor(ex)));
+    }
   }
 
   function createCustom() {
@@ -2336,7 +2371,7 @@ function initProgram(root, opts = {}) {
 
 /* export для node-тестов; в браузере — глобальные объявления */
 if (typeof module !== 'undefined') {
-  module.exports = { defaultItemFor, itemSummary, starterProgram, seedProgramIfEmpty, initProgram };
+  module.exports = { defaultItemFor, itemSummary, starterProgram, seedProgramIfEmpty, initProgram, groupByMuscle, MUSCLE_ORDER_UI };
 }
 
 </script>

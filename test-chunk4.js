@@ -105,6 +105,23 @@ t('itemSummary читаемо описывает элемент', () => {
   const s = prog.itemSummary({ repRangeMin: 6, repRangeMax: 10, workSets: 3, targetRIR: 2, restSec: 150 }, { name: 'Жим' });
   assert(/Жим/.test(s) && /6–10×3/.test(s) && /RIR 2/.test(s), s);
 });
+t('groupByMuscle: альтернативы на одну группу рядом, внутри — по алфавиту', () => {
+  const sorted = prog.groupByMuscle(state.exercises.filter((e) => !e.isCustom));
+  // все ноги подряд одним блоком (включая добавленный в конец библиотеки гакк)
+  const muscles = sorted.map((e) => e.primaryMuscle);
+  const firstLegs = muscles.indexOf('legs'), lastLegs = muscles.lastIndexOf('legs');
+  assert(muscles.slice(firstLegs, lastLegs + 1).every((m) => m === 'legs'), 'ноги разорваны');
+  const legs = sorted.filter((e) => e.primaryMuscle === 'legs').map((e) => e.name);
+  assert(legs.includes('Гакк-приседания') && legs.indexOf('Гакк-приседания') < legs.indexOf('Приседания со штангой'), legs.join('|'));
+  // порядок групп: грудь раньше ног, ноги раньше кора
+  assert(muscles.indexOf('chest') < firstLegs && lastLegs < muscles.lastIndexOf('core'));
+});
+t('замена упражнения: updateDayItem меняет exerciseId, сохраняя параметры', () => {
+  const before = state.program.days.find((d) => d.id === dayA.id).items[0];
+  const s2 = store.updateDayItem(state, dayA.id, 0, { exerciseId: 'leg-press' });
+  const after = s2.program.days.find((d) => d.id === dayA.id).items[0];
+  assert(after.exerciseId === 'leg-press' && after.workSets === before.workSets && after.restSec === before.restSec, JSON.stringify(after));
+});
 t('seedProgramIfEmpty засевает пустую, не трогает заполненную', () => {
   const empty = store.defaultState(ex.EXERCISE_LIBRARY);
   const seeded = prog.seedProgramIfEmpty(empty);

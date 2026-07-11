@@ -1009,6 +1009,21 @@ function epley1rm(weight, repsToFailure) {
   return weight * (1 + repsToFailure / 30);
 }
 
+/**
+ * Сколько повторов делать на том же весе, чтобы попасть в целевой RIR.
+ * Модель: повторы_до_отказа = сделанные_повторы + фактический_RIR.
+ * Целевые повторы = повторы_до_отказа − целевой_RIR, зажатые в диапазон.
+ * Именно это чинит «9 повт при RIR 2 → 10 при RIR 3»: 9+2=11 до отказа,
+ * при цели RIR 3 → 11−3 = 8 повторов.
+ * Если RIR не записан — считаем, что цель была выполнена (повторы не меняем).
+ */
+function projectReps(refSet, targetRIR, item) {
+  const rir = refSet.rir == null ? targetRIR : Number(refSet.rir);
+  const rtf = Number(refSet.reps) + rir;                  // повторы до отказа
+  const reps = Math.round(rtf - targetRIR);
+  return Math.max(item.repRangeMin, Math.min(item.repRangeMax, reps));
+}
+
 /** Целевой RIR недели роста (без делоуда). Рампа масштабируется под growWeeks. */
 function targetRIRForWeek(weekNo, growWeeks) {
   // нед.1 → RIR 3; следующая треть → RIR 2; последние две пятых → RIR 1
@@ -1158,65 +1173,48 @@ function recommend(exerciseId, setNo, ctx) {
     };
   }
 
-  // перегруз: RIR 0 в 2+ рабочих сетах сессии
+  // представительный подход при рабочем весе — с наибольшим числом повторов
+  const atWeight = lastWork.filter((s) => s.weight === workWeight);
+  const refSet = atWeight.reduce((a, s) => (s.reps > a.reps ? s : a), atWeight[0]);
+  const minRir = Math.min(...atWeight.map((s) => (s.rir == null ? targetRIR : Number(s.rir))));
+  const rirTxt = refSet.rir != null ? ` RIR ${refSet.rir}` : '';
+  const rtf = Number(refSet.reps) + (refSet.rir == null ? targetRIR : Number(refSet.rir));
+
+  // повторный перегруз (RIR 0 в 2+ сетах две сессии подряд) → −5% как страховка
   const overreach = (sess) =>
     !!sess && sess.sets.filter((s) => !s.isCalibration && s.rir === 0).length >= 2;
-  const lastOver = overreach(last);
-  const prevOver = overreach(history[1]);
-
-  // повторный перегруз (две сессии подряд) → −5%
-  if (lastOver && prevOver) {
-    const w = roundToStep(workWeight * 0.95, step); // nearest: ближе к целевым −5%, чем floor
+  if (overreach(last) && overreach(history[1])) {
+    const w = roundToStep(workWeight * 0.95, step);
     return {
-      weight: w,
-      reps: item.repRangeMin,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: `Повторный перегруз (RIR 0) — снижаем 5% (${workWeight}→${w} кг).`,
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Повторный перегруз (RIR 0 две сессии) — снижаем 5% (${workWeight}→${w} кг).`,
     };
   }
 
-  // одиночный перегруз → удержание веса
-  if (lastOver) {
-    return {
-      weight: workWeight,
-      reps: item.repRangeMax,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: 'Фактическое усилие выше целевого (RIR 0) — закрепляем вес.',
-    };
-  }
-
-  // двойная прогрессия: все рабочие сеты у потолка повторов → +шаг веса, возврат к низу
-  const allCeiling = lastWork.length > 0 && lastWork.every((s) => s.reps >= item.repRangeMax);
-  if (allCeiling) {
+  // прогрессия веса: потолок повторов достигнут С ЗАПАСОМ (фактический RIR ≥ целевого)
+  if (refSet.reps >= item.repRangeMax && minRir >= targetRIR) {
     const w = roundToStep(workWeight + step, step);
     return {
-      weight: w,
-      reps: item.repRangeMin,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: `Все сеты у потолка (${item.repRangeMax}) — +${step} кг, возврат к ${item.repRangeMin} повт.`,
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Потолок ${item.repRangeMax} повт при RIR ${refSet.rir} (запас есть) — +${step} кг, назад к ${item.repRangeMin}.`,
     };
   }
 
-  // иначе — тот же вес, добавляем повторы (цель — потолок диапазона)
-  const maxReps = Math.max(...lastWork.map((s) => s.reps));
-  const targetReps = Math.min(Math.max(maxReps + 1, item.repRangeMin), item.repRangeMax);
+  // вес тяжеловат: даже до отказа не выходит нижняя граница при целевом RIR → −шаг
+  // (сценарий «13 повт при RIR 0 в диапазоне 10–15, цель RIR 2» → снизить вес)
+  if (rtf < item.repRangeMin + targetRIR) {
+    const w = roundToStep(workWeight - step, step);
+    return {
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `На ${workWeight} кг до отказа лишь ~${rtf} повт — для ${item.repRangeMin} повт при RIR ${targetRIR} вес тяжеловат. −${step} кг.`,
+    };
+  }
+
+  // иначе тот же вес; повторы подбираются под целевой RIR (RIR-aware)
+  const reps = projectReps(refSet, targetRIR, item);
   return {
-    weight: workWeight,
-    reps: targetReps,
-    targetRIR,
-    isDeload: false,
-    needsCalibration: false,
-    lastResult,
-    reason: `Двойная прогрессия — тот же вес, цель +повторы (до ${item.repRangeMax}).`,
+    weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.`,
   };
 }
 
@@ -1225,6 +1223,7 @@ if (typeof module !== 'undefined') {
   module.exports = {
     roundToStep,
     epley1rm,
+    projectReps,
     targetRIRForWeek,
     mesoStatus,
     advanceWeek,
@@ -1845,27 +1844,33 @@ function planExercise(item, exSets, ctx, engine) {
         rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
       };
     }
-    // контрольный сделан — продолжаем от последнего рабочего веса
+    // контрольный сделан — держим вес, повторы под целевой RIR
     const prev = work[work.length - 1];
-    return {
-      mode: 'work',
-      rec: {
-        weight: prev.weight,
-        reps: Math.min(prev.reps, item.repRangeMax),
-        targetRIR: ctx.meso.targetRIR,
-        reason: 'Калибровка подтверждена — держим вес.',
-      },
-    };
+    return { mode: 'work', rec: nextSetRec(prev, ctx, item, engine) };
   }
 
   // обычная рекомендация
   const rec = engine.recommend(item.exerciseId, work.length + 1, ctx);
   if (work.length > 0) {
-    // автоподстановка прошлого сета этой сессии
-    const prev = work[work.length - 1];
-    return { mode: 'work', rec: { ...rec, weight: prev.weight } };
+    // следующий сет этой сессии: тот же вес, повторы пересчитаны от факта прошлого сета
+    return { mode: 'work', rec: nextSetRec(work[work.length - 1], ctx, item, engine) };
   }
   return { mode: 'work', rec };
+}
+
+/** Рекомендация на следующий сет ЭТОЙ сессии от фактического прошлого сета (RIR-aware). */
+function nextSetRec(prev, ctx, item, engine) {
+  const t = ctx.meso.targetRIR;
+  const reps = engine.projectReps(prev, t, item);
+  const rir = prev.rir == null ? t : prev.rir;
+  const rtf = Number(prev.reps) + rir;
+  return {
+    weight: prev.weight,
+    reps,
+    targetRIR: t,
+    needsCalibration: false,
+    reason: `Прошлый подход ${prev.reps}×${prev.weight}${prev.rir != null ? ' RIR ' + prev.rir : ''} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.`,
+  };
 }
 
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
@@ -1874,7 +1879,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, mesoStatus, context };
+  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -2077,6 +2082,8 @@ function initWorkout(root, opts = {}) {
     const act = btn.dataset.act;
     const exId = btn.dataset.ex;
 
+    unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
+
     if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
@@ -2155,27 +2162,52 @@ function initWorkout(root, opts = {}) {
   return { render, stopRest };
 }
 
-/* ---------- сигналы окончания отдыха ---------- */
-
+/* ---------- сигналы окончания отдыха ----------
+ * iOS блокирует WebAudio вне пользовательского жеста, поэтому контекст
+ * создаётся и «прогревается» на тапе (unlockAudio), а beep() лишь
+ * возобновляет его и играет. navigator.vibrate на iPhone не работает —
+ * оставлен как no-op-фолбэк для Android.
+ */
 let _audioCtx = null;
+function _ac() {
+  if (typeof window === 'undefined') return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!_audioCtx) _audioCtx = new AC();
+  return _audioCtx;
+}
+/** Вызвать из обработчика тапа — разблокирует звук на iOS. */
+function unlockAudio() {
+  try {
+    const ac = _ac(); if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+    // беззвучный «тычок», чтобы iOS разблокировал аудиосессию
+    const b = ac.createBuffer(1, 1, 22050);
+    const src = ac.createBufferSource();
+    src.buffer = b; src.connect(ac.destination); src.start(0);
+  } catch (_) {}
+}
 function beep() {
   try {
-    if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return;
-    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = _audioCtx.createOscillator();
-    const g = _audioCtx.createGain();
-    o.type = 'sine';
-    o.frequency.value = 880;
-    g.gain.value = 0.001;
-    o.connect(g); g.connect(_audioCtx.destination);
-    const t = _audioCtx.currentTime;
-    g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-    o.start(t); o.stop(t + 0.36);
+    const ac = _ac(); if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+    // два коротких тона — заметнее в зале
+    const blip = (startAt, freq) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.value = 0.0001;
+      o.connect(g); g.connect(ac.destination);
+      const t = ac.currentTime + startAt;
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.start(t); o.stop(t + 0.3);
+    };
+    blip(0, 880); blip(0.33, 1180);
   } catch (_) { /* тишина, если звук недоступен */ }
 }
 function buzz() {
-  try { if (navigator && navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (_) {}
+  try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([160, 80, 160]); } catch (_) {}
 }
 
 /* export для node-тестов; в браузере — глобальные объявления */

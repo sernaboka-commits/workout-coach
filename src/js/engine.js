@@ -40,6 +40,21 @@ function epley1rm(weight, repsToFailure) {
   return weight * (1 + repsToFailure / 30);
 }
 
+/**
+ * Сколько повторов делать на том же весе, чтобы попасть в целевой RIR.
+ * Модель: повторы_до_отказа = сделанные_повторы + фактический_RIR.
+ * Целевые повторы = повторы_до_отказа − целевой_RIR, зажатые в диапазон.
+ * Именно это чинит «9 повт при RIR 2 → 10 при RIR 3»: 9+2=11 до отказа,
+ * при цели RIR 3 → 11−3 = 8 повторов.
+ * Если RIR не записан — считаем, что цель была выполнена (повторы не меняем).
+ */
+function projectReps(refSet, targetRIR, item) {
+  const rir = refSet.rir == null ? targetRIR : Number(refSet.rir);
+  const rtf = Number(refSet.reps) + rir;                  // повторы до отказа
+  const reps = Math.round(rtf - targetRIR);
+  return Math.max(item.repRangeMin, Math.min(item.repRangeMax, reps));
+}
+
 /** Целевой RIR недели роста (без делоуда). Рампа масштабируется под growWeeks. */
 function targetRIRForWeek(weekNo, growWeeks) {
   // нед.1 → RIR 3; следующая треть → RIR 2; последние две пятых → RIR 1
@@ -189,65 +204,48 @@ function recommend(exerciseId, setNo, ctx) {
     };
   }
 
-  // перегруз: RIR 0 в 2+ рабочих сетах сессии
+  // представительный подход при рабочем весе — с наибольшим числом повторов
+  const atWeight = lastWork.filter((s) => s.weight === workWeight);
+  const refSet = atWeight.reduce((a, s) => (s.reps > a.reps ? s : a), atWeight[0]);
+  const minRir = Math.min(...atWeight.map((s) => (s.rir == null ? targetRIR : Number(s.rir))));
+  const rirTxt = refSet.rir != null ? ` RIR ${refSet.rir}` : '';
+  const rtf = Number(refSet.reps) + (refSet.rir == null ? targetRIR : Number(refSet.rir));
+
+  // повторный перегруз (RIR 0 в 2+ сетах две сессии подряд) → −5% как страховка
   const overreach = (sess) =>
     !!sess && sess.sets.filter((s) => !s.isCalibration && s.rir === 0).length >= 2;
-  const lastOver = overreach(last);
-  const prevOver = overreach(history[1]);
-
-  // повторный перегруз (две сессии подряд) → −5%
-  if (lastOver && prevOver) {
-    const w = roundToStep(workWeight * 0.95, step); // nearest: ближе к целевым −5%, чем floor
+  if (overreach(last) && overreach(history[1])) {
+    const w = roundToStep(workWeight * 0.95, step);
     return {
-      weight: w,
-      reps: item.repRangeMin,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: `Повторный перегруз (RIR 0) — снижаем 5% (${workWeight}→${w} кг).`,
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Повторный перегруз (RIR 0 две сессии) — снижаем 5% (${workWeight}→${w} кг).`,
     };
   }
 
-  // одиночный перегруз → удержание веса
-  if (lastOver) {
-    return {
-      weight: workWeight,
-      reps: item.repRangeMax,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: 'Фактическое усилие выше целевого (RIR 0) — закрепляем вес.',
-    };
-  }
-
-  // двойная прогрессия: все рабочие сеты у потолка повторов → +шаг веса, возврат к низу
-  const allCeiling = lastWork.length > 0 && lastWork.every((s) => s.reps >= item.repRangeMax);
-  if (allCeiling) {
+  // прогрессия веса: потолок повторов достигнут С ЗАПАСОМ (фактический RIR ≥ целевого)
+  if (refSet.reps >= item.repRangeMax && minRir >= targetRIR) {
     const w = roundToStep(workWeight + step, step);
     return {
-      weight: w,
-      reps: item.repRangeMin,
-      targetRIR,
-      isDeload: false,
-      needsCalibration: false,
-      lastResult,
-      reason: `Все сеты у потолка (${item.repRangeMax}) — +${step} кг, возврат к ${item.repRangeMin} повт.`,
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Потолок ${item.repRangeMax} повт при RIR ${refSet.rir} (запас есть) — +${step} кг, назад к ${item.repRangeMin}.`,
     };
   }
 
-  // иначе — тот же вес, добавляем повторы (цель — потолок диапазона)
-  const maxReps = Math.max(...lastWork.map((s) => s.reps));
-  const targetReps = Math.min(Math.max(maxReps + 1, item.repRangeMin), item.repRangeMax);
+  // вес тяжеловат: даже до отказа не выходит нижняя граница при целевом RIR → −шаг
+  // (сценарий «13 повт при RIR 0 в диапазоне 10–15, цель RIR 2» → снизить вес)
+  if (rtf < item.repRangeMin + targetRIR) {
+    const w = roundToStep(workWeight - step, step);
+    return {
+      weight: w, reps: item.repRangeMin, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `На ${workWeight} кг до отказа лишь ~${rtf} повт — для ${item.repRangeMin} повт при RIR ${targetRIR} вес тяжеловат. −${step} кг.`,
+    };
+  }
+
+  // иначе тот же вес; повторы подбираются под целевой RIR (RIR-aware)
+  const reps = projectReps(refSet, targetRIR, item);
   return {
-    weight: workWeight,
-    reps: targetReps,
-    targetRIR,
-    isDeload: false,
-    needsCalibration: false,
-    lastResult,
-    reason: `Двойная прогрессия — тот же вес, цель +повторы (до ${item.repRangeMax}).`,
+    weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.`,
   };
 }
 
@@ -256,6 +254,7 @@ if (typeof module !== 'undefined') {
   module.exports = {
     roundToStep,
     epley1rm,
+    projectReps,
     targetRIRForWeek,
     mesoStatus,
     advanceWeek,

@@ -135,27 +135,33 @@ function planExercise(item, exSets, ctx, engine) {
         rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
       };
     }
-    // контрольный сделан — продолжаем от последнего рабочего веса
+    // контрольный сделан — держим вес, повторы под целевой RIR
     const prev = work[work.length - 1];
-    return {
-      mode: 'work',
-      rec: {
-        weight: prev.weight,
-        reps: Math.min(prev.reps, item.repRangeMax),
-        targetRIR: ctx.meso.targetRIR,
-        reason: 'Калибровка подтверждена — держим вес.',
-      },
-    };
+    return { mode: 'work', rec: nextSetRec(prev, ctx, item, engine) };
   }
 
   // обычная рекомендация
   const rec = engine.recommend(item.exerciseId, work.length + 1, ctx);
   if (work.length > 0) {
-    // автоподстановка прошлого сета этой сессии
-    const prev = work[work.length - 1];
-    return { mode: 'work', rec: { ...rec, weight: prev.weight } };
+    // следующий сет этой сессии: тот же вес, повторы пересчитаны от факта прошлого сета
+    return { mode: 'work', rec: nextSetRec(work[work.length - 1], ctx, item, engine) };
   }
   return { mode: 'work', rec };
+}
+
+/** Рекомендация на следующий сет ЭТОЙ сессии от фактического прошлого сета (RIR-aware). */
+function nextSetRec(prev, ctx, item, engine) {
+  const t = ctx.meso.targetRIR;
+  const reps = engine.projectReps(prev, t, item);
+  const rir = prev.rir == null ? t : prev.rir;
+  const rtf = Number(prev.reps) + rir;
+  return {
+    weight: prev.weight,
+    reps,
+    targetRIR: t,
+    needsCalibration: false,
+    reason: `Прошлый подход ${prev.reps}×${prev.weight}${prev.rir != null ? ' RIR ' + prev.rir : ''} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.`,
+  };
 }
 
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
@@ -164,7 +170,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, mesoStatus, context };
+  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -367,6 +373,8 @@ function initWorkout(root, opts = {}) {
     const act = btn.dataset.act;
     const exId = btn.dataset.ex;
 
+    unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
+
     if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
@@ -445,27 +453,52 @@ function initWorkout(root, opts = {}) {
   return { render, stopRest };
 }
 
-/* ---------- сигналы окончания отдыха ---------- */
-
+/* ---------- сигналы окончания отдыха ----------
+ * iOS блокирует WebAudio вне пользовательского жеста, поэтому контекст
+ * создаётся и «прогревается» на тапе (unlockAudio), а beep() лишь
+ * возобновляет его и играет. navigator.vibrate на iPhone не работает —
+ * оставлен как no-op-фолбэк для Android.
+ */
 let _audioCtx = null;
+function _ac() {
+  if (typeof window === 'undefined') return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!_audioCtx) _audioCtx = new AC();
+  return _audioCtx;
+}
+/** Вызвать из обработчика тапа — разблокирует звук на iOS. */
+function unlockAudio() {
+  try {
+    const ac = _ac(); if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+    // беззвучный «тычок», чтобы iOS разблокировал аудиосессию
+    const b = ac.createBuffer(1, 1, 22050);
+    const src = ac.createBufferSource();
+    src.buffer = b; src.connect(ac.destination); src.start(0);
+  } catch (_) {}
+}
 function beep() {
   try {
-    if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return;
-    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = _audioCtx.createOscillator();
-    const g = _audioCtx.createGain();
-    o.type = 'sine';
-    o.frequency.value = 880;
-    g.gain.value = 0.001;
-    o.connect(g); g.connect(_audioCtx.destination);
-    const t = _audioCtx.currentTime;
-    g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-    o.start(t); o.stop(t + 0.36);
+    const ac = _ac(); if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+    // два коротких тона — заметнее в зале
+    const blip = (startAt, freq) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.value = 0.0001;
+      o.connect(g); g.connect(ac.destination);
+      const t = ac.currentTime + startAt;
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.start(t); o.stop(t + 0.3);
+    };
+    blip(0, 880); blip(0.33, 1180);
   } catch (_) { /* тишина, если звук недоступен */ }
 }
 function buzz() {
-  try { if (navigator && navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (_) {}
+  try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([160, 80, 160]); } catch (_) {}
 }
 
 /* export для node-тестов; в браузере — глобальные объявления */

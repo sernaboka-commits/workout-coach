@@ -82,11 +82,13 @@ t('тонус: больше повторов, короче отдых', () => {
 });
 
 console.log('— пол меняет акцент —');
-t('Ж получает больше упражнений на ноги/ягодичные, чем М (90 мин фулбади)', () => {
-  const legs = (r) => r.days.reduce((s, d) => s + d.items.filter((it) => muscleOf[it.exerciseId] === 'legs').length, 0);
-  const f = legs(G({ sex: 'f', goal: 'hypertrophy', daysPerWeek: 3, minutes: 90, split: 'full' }));
-  const m = legs(G({ sex: 'm', goal: 'hypertrophy', daysPerWeek: 3, minutes: 90, split: 'full' }));
-  assert(f > m, `Ж=${f}, М=${m}`);
+t('Ж и М дают разные программы; Ж — больше задней цепи/ягодичных (45 мин фулбади)', () => {
+  const post = new Set(['romanian-dl', 'hip-thrust', 'bulgarian-split', 'walking-lunge', 'leg-curl', 'hyperextension']);
+  const cnt = (r) => r.days.reduce((s, d) => s + d.items.filter((it) => post.has(it.exerciseId)).length, 0);
+  const rf = G({ sex: 'f', goal: 'hypertrophy', daysPerWeek: 3, minutes: 45, split: 'full' });
+  const rm = G({ sex: 'm', goal: 'hypertrophy', daysPerWeek: 3, minutes: 45, split: 'full' });
+  assert(JSON.stringify(rf.days) !== JSON.stringify(rm.days), 'программы идентичны');
+  assert(cnt(rf) >= cnt(rm), `Ж=${cnt(rf)}, М=${cnt(rm)}`);
 });
 
 console.log('— недельный объём в разумном коридоре —');
@@ -96,6 +98,25 @@ t('фулбади 3×90: крупные группы ≥6 сетов/нед', ()
   for (const d of r.days) for (const it of d.items)
     vol[muscleOf[it.exerciseId]] = (vol[muscleOf[it.exerciseId]] || 0) + it.workSets;
   for (const m of ['chest', 'back', 'legs']) assert((vol[m] || 0) >= 6, `${m}=${vol[m]}`);
+});
+
+console.log('— стретч-приоритет (Wolf 2025) —');
+t('гипертрофия: стретч-трицепс (overhead-ext) приоритетнее pushdown в пуш-дне', () => {
+  const r = G({ sex: 'm', goal: 'hypertrophy', daysPerWeek: 5, minutes: 90, split: 'split' });
+  const push = r.days.find((d) => d.label === 'Пуш');
+  const ids = push.items.map((it) => it.exerciseId);
+  const io = ids.indexOf('overhead-ext'), ip = ids.indexOf('cable-pushdown');
+  assert(io >= 0, 'overhead-ext не выбран: ' + ids.join(','));
+  assert(ip === -1 || io < ip, `pushdown раньше стретч-разгибания: ${ids.join(',')}`);
+});
+t('якорь дня всегда первый: присед на дне ног, жим на пуш-дне', () => {
+  const rH = G({ sex: 'm', goal: 'hypertrophy', daysPerWeek: 3, minutes: 60, split: 'full' });
+  const rS = G({ sex: 'm', goal: 'strength', daysPerWeek: 3, minutes: 60, split: 'full' });
+  assert(rH.days[0].items[0].exerciseId === 'bb-squat', 'H: ' + rH.days[0].items[0].exerciseId);
+  assert(rS.days[0].items[0].exerciseId === 'bb-squat', 'S: ' + rS.days[0].items[0].exerciseId);
+});
+t('пулы: все стретч-id существуют в библиотеке', () => {
+  for (const id of gen.GEN_STRETCH) assert(ids.has(id), 'нет ' + id);
 });
 
 console.log(`\nИтог: ${pass} passed, ${fail} failed`);

@@ -1272,6 +1272,15 @@ if (typeof module !== 'undefined') {
  *     (наклонный жим, румынская тяга, сгибания лёжа, французский из-за головы)
  *   - пол меняет акцент отбора, не принципы: Ж — ноги/ягодичные/дельты,
  *     М — грудь/руки/плечи (физиология роста одинакова)
+ *
+ * Уточнено по свежим данным 2025–2026:
+ *   - Wolf et al. 2025 (LP vs full ROM): для максимизации роста, особенно
+ *     ВЕРХА тела, подчёркивать растянутую позицию → стретч-упражнения
+ *     получают приоритет отбора (кроме цели «сила», где первичен компаунд).
+ *   - McMahon et al. 2026: умеренная интенсивность с частичными в растянутой
+ *     ≈ высокая интенсивность с полным ROM по гипертрофии.
+ *   - Pelland et al. 2026 (Sports Med, dose-response): высокий недельный объём
+ *     + частота ≥2×/нед подтверждены как драйверы роста → сохранён сплит-логикой.
  * ============================================================ */
 
 /* ---------- параметры по цели ---------- */
@@ -1300,20 +1309,27 @@ const GEN_GOALS = {
 /* ---------- пулы упражнений по типам дня (в порядке приоритета) ---------- */
 
 const GEN_POOLS = {
-  // фулбади: 3 ротации, каждая группа 2–3×/нед
-  fullA: ['bb-squat', 'bb-bench-press', 'bb-row', 'db-shoulder-press', 'leg-curl', 'cable-pushdown', 'cable-crunch', 'hip-thrust'],
-  fullB: ['romanian-dl', 'incline-db-press', 'lat-pulldown', 'lateral-raise', 'leg-extension', 'bb-curl', 'bulgarian-split', 'hanging-leg-raise'],
-  fullC: ['leg-press', 'db-bench-press', 'seated-cable-row', 'ohp', 'hip-thrust', 'hammer-curl', 'calf-raise', 'ab-wheel'],
-  // верх/низ
-  upper:  ['bb-bench-press', 'bb-row', 'ohp', 'lat-pulldown', 'cable-fly', 'lateral-raise', 'bb-curl', 'cable-pushdown', 'face-pull'],
-  lower:  ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'hip-thrust', 'leg-extension', 'calf-raise', 'cable-crunch'],
-  upper2: ['incline-db-press', 'seated-cable-row', 'db-shoulder-press', 'pull-up', 'pec-deck', 'rear-delt-fly', 'hammer-curl', 'overhead-ext'],
-  lower2: ['deadlift', 'hip-thrust', 'bulgarian-split', 'leg-curl', 'walking-lunge', 'leg-extension', 'calf-raise', 'hanging-leg-raise'],
+  // фулбади: 3 ротации, каждая группа 2–3×/нед; день = компаунд-анкер → стретч-работа
+  fullA: ['bb-squat', 'bb-bench-press', 'lat-pulldown', 'romanian-dl', 'lateral-raise', 'overhead-ext', 'hanging-leg-raise'],
+  fullB: ['romanian-dl', 'incline-db-press', 'seated-cable-row', 'leg-extension', 'cable-lateral', 'db-curl', 'calf-raise'],
+  fullC: ['leg-press', 'incline-bb-press', 'pull-up', 'hip-thrust', 'pec-deck', 'skull-crusher', 'cable-crunch'],
+  // верх/низ (первые ~6 сбалансированы по группам, чтобы день не «плыл» при урезании времени)
+  upper:  ['bb-bench-press', 'lat-pulldown', 'incline-db-press', 'seated-cable-row', 'ohp', 'overhead-ext', 'lateral-raise', 'db-curl', 'face-pull'],
+  lower:  ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'bulgarian-split', 'leg-extension', 'hip-thrust', 'calf-raise'],
+  upper2: ['incline-db-press', 'pull-up', 'db-shoulder-press', 'bb-row', 'skull-crusher', 'lateral-raise', 'pec-deck', 'hammer-curl', 'rear-delt-fly'],
+  lower2: ['front-squat', 'romanian-dl', 'bulgarian-split', 'leg-curl', 'walking-lunge', 'leg-extension', 'hip-thrust', 'calf-raise'],
   // пуш/пул/ноги
-  push: ['bb-bench-press', 'ohp', 'incline-db-press', 'cable-fly', 'lateral-raise', 'overhead-ext', 'cable-pushdown'],
-  pull: ['lat-pulldown', 'bb-row', 'seated-cable-row', 'face-pull', 'bb-curl', 'hammer-curl', 'straight-arm-pd'],
-  legs: ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'hip-thrust', 'leg-extension', 'calf-raise'],
+  push: ['bb-bench-press', 'incline-db-press', 'ohp', 'overhead-ext', 'lateral-raise', 'pec-deck', 'cable-lateral', 'db-shoulder-press', 'cable-pushdown'],
+  pull: ['pull-up', 'bb-row', 'seated-cable-row', 'db-curl', 'face-pull', 'lat-pulldown', 'hammer-curl', 'straight-arm-pd', 'rear-delt-fly'],
+  legs: ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'bulgarian-split', 'hip-thrust', 'leg-extension', 'calf-raise'],
 };
+
+/* упражнения с нагрузкой в растянутой позиции — приоритет отбора (Wolf 2025) */
+const GEN_STRETCH = new Set([
+  'incline-db-press', 'incline-bb-press', 'db-bench-press', 'pec-deck', 'cable-fly', 'db-fly',
+  'romanian-dl', 'deadlift', 'leg-curl', 'bulgarian-split', 'walking-lunge', 'leg-press',
+  'overhead-ext', 'skull-crusher', 'cable-lateral', 'straight-arm-pd', 'pull-up', 'lat-pulldown',
+]);
 
 const GEN_LABELS = {
   fullA: 'A', fullB: 'B', fullC: 'C',
@@ -1363,8 +1379,13 @@ function generateProgram(opts, library) {
     const scored = GEN_POOLS[key]
       .filter((id) => byId[id])
       .map((id, i) => {
+        // первый в пуле — якорный компаунд дня, всегда идёт первым
+        if (i === 0) return { id, score: -1000 };
         let score = i;
-        if (boost.includes(id)) score -= 1.5;
+        if (boost.includes(id)) score -= 1.5;                 // акцент по полу
+        // растянутая позиция приоритетна для роста (Wolf 2025); при цели «сила»
+        // первичен тяжёлый компаунд — стретч-бонус не применяем
+        if (goal !== 'strength' && GEN_STRETCH.has(id)) score -= 1;
         if (goal === 'strength' && byId[id].kind === 'isolation') score += 3;
         return { id, score };
       })
@@ -1392,7 +1413,8 @@ function generateProgram(opts, library) {
     return { key, label, items, estMinutes: Math.round(genEstimateMin(items)) };
   });
 
-  const note = `${g.label}: ${g.hint}. Объём ~10–20 сетов/группу в неделю, каждая группа ≥2×/нед. `
+  const note = `${g.label}: ${g.hint}. Объём ~10–20 сетов/группу в неделю, каждая группа ≥2×/нед, `
+    + `приоритет упражнениям в растянутой позиции (данные 2025–2026). `
     + (sex === 'f' ? 'Акцент: ноги/ягодичные/дельты.' : 'Акцент: грудь/спина/руки.');
 
   return { days, note, goal, sex, minutes };
@@ -1400,7 +1422,7 @@ function generateProgram(opts, library) {
 
 /* export для node-тестов; в браузере — глобальные объявления */
 if (typeof module !== 'undefined') {
-  module.exports = { GEN_GOALS, GEN_POOLS, GEN_LABELS, genPickSplit, genEstimateMin, generateProgram };
+  module.exports = { GEN_GOALS, GEN_POOLS, GEN_LABELS, GEN_STRETCH, genPickSplit, genEstimateMin, generateProgram };
 }
 
 </script>

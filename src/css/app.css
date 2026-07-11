@@ -194,6 +194,18 @@ html, body {
 }
 .log-wide:active { background: var(--accent-2); }
 
+/* --- завершение тренировки + итог --- */
+.finish-btn { width: 100%; margin: 4px 0 10px; background: var(--surface-2); color: var(--text); }
+.finish-btn:active { background: var(--line); }
+.sum-stats { display: flex; gap: 8px; margin: 4px 0 12px; }
+.sum-stat { flex: 1; background: var(--surface-2); border-radius: 10px; padding: 12px 8px; text-align: center; }
+.sum-stat b { display: block; font-size: 22px; color: var(--accent); }
+.sum-stat small { color: var(--muted); font-size: 11px; }
+.sum-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.sum-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.sum-row span { font-weight: 600; }
+.sum-row small { color: var(--muted); text-align: right; }
+
 .mini {
   border: 0; background: transparent; color: var(--muted); font-size: 16px;
   width: 32px; height: 32px; cursor: pointer; border-radius: 8px;

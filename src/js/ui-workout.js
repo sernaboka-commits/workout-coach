@@ -83,6 +83,23 @@ function clampStep(value, delta, step, min, max) {
   return v;
 }
 
+/** Итог тренировки: рабочие подходы, тоннаж, разбивка по упражнениям.
+ *  exResolver(id) → упражнение или null (для названий). Чистая функция. */
+function sessionSummary(session, exResolver) {
+  const sets = (session && session.sets) || [];
+  const work = sets.filter((s) => !s.isCalibration);
+  const tonnage = work.reduce((t, s) => t + Number(s.weight) * Number(s.reps), 0);
+  const byEx = {};
+  for (const s of sets) (byEx[s.exerciseId] = byEx[s.exerciseId] || []).push(s);
+  const exercises = Object.keys(byEx).map((id) => {
+    const ws = byEx[id].filter((x) => !x.isCalibration);
+    const top = ws.reduce((a, x) => (a && a.weight * a.reps >= x.weight * x.reps ? a : x), null);
+    const ex = exResolver ? exResolver(id) : null;
+    return { exerciseId: id, name: ex ? ex.name : id, sets: ws.length, calib: byEx[id].length - ws.length, top };
+  });
+  return { workSets: work.length, tonnage: Math.round(tonnage), exercises };
+}
+
 /** Прогресс дня: сколько рабочих сетов сделано из плановых. */
 function dayProgress(day, sessionSets) {
   let done = 0, total = 0;
@@ -189,6 +206,7 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   let timer = null;        // { endTs, restSec, handle }
+  let showSummary = false; // оверлей итога тренировки
 
   // возобновляем сегодняшнюю сессию этого дня, если она уже начата
   function resumeSession() {
@@ -317,7 +335,38 @@ function initWorkout(root, opts = {}) {
         </section>`);
     }
 
-    root.innerHTML = `<div class="wk-screen">${parts.join('')}</div>${timerHtml()}`;
+    if (liveSession().sets.length) {
+      parts.push(`<button class="btn finish-btn" data-act="finish">🏁 Завершить тренировку</button>`);
+    }
+
+    root.innerHTML = `<div class="wk-screen">${parts.join('')}</div>${timerHtml()}${showSummary ? summaryHtml() : ''}`;
+  }
+
+  function summaryHtml() {
+    const ses = liveSession();
+    const sum = sessionSummary(ses, (id) => S.getExercise(state, id));
+    const startMs = ses.date ? new Date(ses.date).getTime() : null;
+    let dur = '—';
+    if (startMs) {
+      const min = Math.max(1, Math.round((Date.now() - startMs) / 60000));
+      dur = min < 60 ? `${min} мин` : `${Math.floor(min / 60)} ч ${min % 60} мин`;
+    }
+    const rows = sum.exercises.map((e) =>
+      `<div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : (e.calib ? ' · только калибровка' : '')}</small></div>`).join('');
+    return `
+      <div class="overlay">
+        <div class="sheet">
+          <div class="sheet-head"><b>Тренировка сохранена ✓</b><button class="mini" data-act="close-summary">✕</button></div>
+          <div class="sum-stats">
+            <div class="sum-stat"><b>${sum.workSets}</b><small>рабочих подходов</small></div>
+            <div class="sum-stat"><b>${sum.tonnage}</b><small>тоннаж, кг</small></div>
+            <div class="sum-stat"><b>${dur}</b><small>длительность</small></div>
+          </div>
+          <div class="sum-list">${rows || '<div class="pi-empty">Нет подходов.</div>'}</div>
+          <div class="meso-hint">Данные уже в памяти телефона — можно закрывать. В след. раз по этим упражнениям будут рекомендации по весу и RIR.</div>
+          <button class="log-wide" data-act="close-summary">Готово</button>
+        </div>
+      </div>`;
   }
 
   function timerHtml() {
@@ -368,6 +417,8 @@ function initWorkout(root, opts = {}) {
 
   /* --- события --- */
   root.addEventListener('click', (e) => {
+    // закрытие итога по тапу на фон (сам оверлей, не его содержимое)
+    if (showSummary && e.target.classList.contains('overlay')) { showSummary = false; render(); return; }
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
     const act = btn.dataset.act;
@@ -375,6 +426,8 @@ function initWorkout(root, opts = {}) {
 
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
+    if (act === 'finish') { showSummary = true; render(); return; }
+    if (act === 'close-summary') { showSummary = false; render(); return; }
     if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
@@ -505,6 +558,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary,
   };
 }

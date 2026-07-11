@@ -280,11 +280,57 @@ function zoneAdvice(type, zone) {
   return '';
 }
 
+/* ---------- календарь тренировок (силовые + бег на одной сетке) ---------- */
+
+const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+/**
+ * Сетка месяца 6×7 (Пн-первый). Каждая ячейка:
+ * { date, dayNum, inMonth, workoutSets, runs:[{type,hard,km}], plannedLabel }
+ * month — 0..11.
+ */
+function monthGrid(state, { year, month }) {
+  const first = new Date(Date.UTC(year, month, 1));
+  const startIdx = (first.getUTCDay() + 6) % 7;                 // Пн = 0
+  const gridStart = new Date(first);
+  gridStart.setUTCDate(1 - startIdx);
+
+  const sesByDate = {}, runByDate = {};
+  for (const s of state.sessions || []) {
+    const k = String(s.date).slice(0, 10);
+    const n = (s.sets || []).filter((x) => !x.isCalibration).length;
+    if (n) sesByDate[k] = (sesByDate[k] || 0) + n;
+  }
+  for (const r of state.runs || []) {
+    const k = String(r.date).slice(0, 10);
+    (runByDate[k] = runByDate[k] || []).push({ type: r.type, hard: !!(RUN_TYPES[r.type] && RUN_TYPES[r.type].hard), km: r.distanceKm });
+  }
+  const plannedByWd = {};
+  for (const d of (state.program && state.program.days) || []) if (d.weekday != null) plannedByWd[d.weekday] = d.label;
+
+  const weeks = [];
+  for (let w = 0; w < 6; w++) {
+    const row = [];
+    for (let d = 0; d < 7; d++) {
+      const cur = new Date(gridStart);
+      cur.setUTCDate(gridStart.getUTCDate() + w * 7 + d);
+      const k = cur.toISOString().slice(0, 10);
+      row.push({
+        date: k, dayNum: cur.getUTCDate(), inMonth: cur.getUTCMonth() === month,
+        workoutSets: sesByDate[k] || 0, runs: runByDate[k] || [], plannedLabel: plannedByWd[d] || null,
+      });
+    }
+    weeks.push(row);
+  }
+  return weeks;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
     HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
+    WEEKDAY_SHORT, monthGrid,
   };
 }

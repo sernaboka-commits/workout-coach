@@ -58,7 +58,10 @@ const APAL = {
 
 function initAnalytics(root, opts = {}) {
   const St = opts.store || { load, save, updateSet, deleteSet, getExercise };
-  const An = opts.analytics || { e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR };
+  const An = opts.analytics || {
+    e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR,
+    monthGrid, WEEKDAY_SHORT, RUN_TYPES, fmtPace, paceSecKm,
+  };
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
 
@@ -67,6 +70,9 @@ function initAnalytics(root, opts = {}) {
   let selEx = null;
   let editing = null;               // setId в режиме правки
   let draft = null;                 // { weight, reps, rir }
+  const _now = new Date();
+  let calYear = _now.getFullYear(), calMonth = _now.getMonth();   // видимый месяц календаря
+  let calSel = null;                // выбранная дата (детали дня)
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -74,6 +80,65 @@ function initAnalytics(root, opts = {}) {
     const ids = new Set();
     for (const s of state.sessions) for (const st of s.sets) ids.add(st.exerciseId);
     return state.exercises.filter((e) => ids.has(e.id));
+  }
+
+  const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  function calendarHtml() {
+    const weeks = An.monthGrid(state, { year: calYear, month: calMonth });
+    const head = An.WEEKDAY_SHORT.map((w) => `<div class="cal-wd">${w}</div>`).join('');
+    const cells = weeks.map((row) => row.map((c) => {
+      const cls = ['cal-cell'];
+      if (!c.inMonth) cls.push('out');
+      if (c.date === todayISO) cls.push('today');
+      if (c.date === calSel) cls.push('sel');
+      const marks = [];
+      if (c.workoutSets) marks.push('<span class="cal-m wo">🏋️</span>');
+      for (const r of c.runs.slice(0, 3)) marks.push(`<span class="cal-dot ${r.hard ? 'hard' : 'easy'}"></span>`);
+      const planned = (!c.workoutSets && c.plannedLabel) ? `<span class="cal-plan">${c.plannedLabel}</span>` : '';
+      return `<button class="${cls.join(' ')}" data-act="cal-day" data-date="${c.date}">
+        <span class="cal-n">${c.dayNum}</span>${planned}
+        <span class="cal-marks">${marks.join('')}</span></button>`;
+    }).join('')).join('');
+
+    return `
+      <section class="an-card">
+        <div class="an-head">
+          <b>Календарь</b>
+          <div class="cal-nav">
+            <button class="mini" data-act="cal-prev">‹</button>
+            <span class="cal-title">${MONTHS[calMonth]} ${calYear}</span>
+            <button class="mini" data-act="cal-next">›</button>
+          </div>
+        </div>
+        <div class="cal-grid">${head}${cells}</div>
+        <div class="cal-legend"><span>🏋️ силовая</span><span><i class="cal-dot easy"></i> лёгкий бег</span><span><i class="cal-dot hard"></i> тяжёлый бег</span><span class="cal-plan">A</span> план</div>
+        ${calDetailHtml()}
+      </section>`;
+  }
+
+  function calDetailHtml() {
+    if (!calSel) return '';
+    const sessions = (state.sessions || []).filter((s) => String(s.date).slice(0, 10) === calSel);
+    const runs = (state.runs || []).filter((r) => String(r.date).slice(0, 10) === calSel);
+    if (!sessions.length && !runs.length) {
+      const planned = An.monthGrid(state, { year: calYear, month: calMonth }).flat().find((c) => c.date === calSel);
+      const p = planned && planned.plannedLabel ? ` По плану: день ${planned.plannedLabel}.` : '';
+      return `<div class="cal-detail"><b>${calSel}</b> — пусто.${p}</div>`;
+    }
+    const parts = [];
+    for (const s of sessions) {
+      const sum = An.RUN_TYPES ? null : null;
+      const nSets = s.sets.filter((x) => !x.isCalibration).length;
+      const exNames = [...new Set(s.sets.map((x) => (St.getExercise(state, x.exerciseId) || { name: x.exerciseId }).name))];
+      parts.push(`<div class="cal-detail-row">🏋️ Силовая · ${nSets} подх · ${exNames.join(', ')}</div>`);
+    }
+    for (const r of runs) {
+      const t = An.RUN_TYPES[r.type] || { label: r.type };
+      parts.push(`<div class="cal-detail-row">🏃 ${t.label} · ${r.distanceKm} км · ${An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec))}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}</div>`);
+    }
+    return `<div class="cal-detail"><b>${calSel}</b>${parts.join('')}</div>`;
   }
 
   function render() {
@@ -84,6 +149,8 @@ function initAnalytics(root, opts = {}) {
     root.innerHTML = `
       <div class="an-screen">
         <div class="wk-title">Аналитика</div>
+
+        ${calendarHtml()}
 
         <section class="an-card">
           <div class="an-head">
@@ -251,7 +318,10 @@ function initAnalytics(root, opts = {}) {
     const act = btn.dataset.act, setId = btn.dataset.set;
     const st = setId ? findSet(setId) : null;
 
-    if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }
+    if (act === 'cal-prev') { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } render(); }
+    else if (act === 'cal-next') { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } render(); }
+    else if (act === 'cal-day') { calSel = calSel === btn.dataset.date ? null : btn.dataset.date; render(); }
+    else if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }
     else if (act === 'cancel-set') { editing = null; draft = null; render(); }
     else if (act === 'e-' || act === 'e+') { stepDraft(btn.dataset.field, act === 'e+' ? 1 : -1, st); render(); }
     else if (act === 'save-set' && st) { persist(St.updateSet(state, setId, { weight: draft.weight, reps: draft.reps, rir: draft.rir })); editing = null; draft = null; }

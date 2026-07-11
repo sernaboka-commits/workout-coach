@@ -352,6 +352,31 @@ html, body {
   border-radius: 10px; padding: 8px 10px; font-size: 14px; max-width: 60%;
 }
 
+/* --- календарь тренировок --- */
+.cal-nav { display: flex; align-items: center; gap: 6px; }
+.cal-title { font-size: 13px; color: var(--muted); min-width: 96px; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-wd { text-align: center; color: var(--muted); font-size: 11px; padding: 2px 0 4px; }
+.cal-cell {
+  position: relative; aspect-ratio: 1 / 1; border: 0; background: var(--surface-2);
+  border-radius: 8px; color: var(--text); cursor: pointer; padding: 3px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px;
+}
+.cal-cell.out { opacity: .32; }
+.cal-cell.today { outline: 2px solid var(--accent); }
+.cal-cell.sel { background: var(--line); }
+.cal-n { font-size: 12px; font-weight: 600; }
+.cal-plan { font-size: 9px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; }
+.cal-marks { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: auto; }
+.cal-m.wo { font-size: 10px; }
+.cal-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.cal-dot.easy { background: var(--ok); }
+.cal-dot.hard { background: var(--warn); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 11.5px; align-items: center; }
+.cal-legend i { vertical-align: middle; }
+.cal-detail { margin-top: 10px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.cal-detail-row { color: var(--muted); margin-top: 4px; }
+
 .stag { background: var(--surface-2); border-left: 3px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .stag-name { font-weight: 700; }
 .stag-hint { color: var(--muted); font-size: 13px; margin-top: 3px; }
@@ -1530,12 +1555,58 @@ function zoneAdvice(type, zone) {
   return '';
 }
 
+/* ---------- календарь тренировок (силовые + бег на одной сетке) ---------- */
+
+const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+/**
+ * Сетка месяца 6×7 (Пн-первый). Каждая ячейка:
+ * { date, dayNum, inMonth, workoutSets, runs:[{type,hard,km}], plannedLabel }
+ * month — 0..11.
+ */
+function monthGrid(state, { year, month }) {
+  const first = new Date(Date.UTC(year, month, 1));
+  const startIdx = (first.getUTCDay() + 6) % 7;                 // Пн = 0
+  const gridStart = new Date(first);
+  gridStart.setUTCDate(1 - startIdx);
+
+  const sesByDate = {}, runByDate = {};
+  for (const s of state.sessions || []) {
+    const k = String(s.date).slice(0, 10);
+    const n = (s.sets || []).filter((x) => !x.isCalibration).length;
+    if (n) sesByDate[k] = (sesByDate[k] || 0) + n;
+  }
+  for (const r of state.runs || []) {
+    const k = String(r.date).slice(0, 10);
+    (runByDate[k] = runByDate[k] || []).push({ type: r.type, hard: !!(RUN_TYPES[r.type] && RUN_TYPES[r.type].hard), km: r.distanceKm });
+  }
+  const plannedByWd = {};
+  for (const d of (state.program && state.program.days) || []) if (d.weekday != null) plannedByWd[d.weekday] = d.label;
+
+  const weeks = [];
+  for (let w = 0; w < 6; w++) {
+    const row = [];
+    for (let d = 0; d < 7; d++) {
+      const cur = new Date(gridStart);
+      cur.setUTCDate(gridStart.getUTCDate() + w * 7 + d);
+      const k = cur.toISOString().slice(0, 10);
+      row.push({
+        date: k, dayNum: cur.getUTCDate(), inMonth: cur.getUTCMonth() === month,
+        workoutSets: sesByDate[k] || 0, runs: runByDate[k] || [], plannedLabel: plannedByWd[d] || null,
+      });
+    }
+    weeks.push(row);
+  }
+  return weeks;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
     HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
+    WEEKDAY_SHORT, monthGrid,
   };
 }
 
@@ -2765,7 +2836,10 @@ const APAL = {
 
 function initAnalytics(root, opts = {}) {
   const St = opts.store || { load, save, updateSet, deleteSet, getExercise };
-  const An = opts.analytics || { e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR };
+  const An = opts.analytics || {
+    e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR,
+    monthGrid, WEEKDAY_SHORT, RUN_TYPES, fmtPace, paceSecKm,
+  };
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
 
@@ -2774,6 +2848,9 @@ function initAnalytics(root, opts = {}) {
   let selEx = null;
   let editing = null;               // setId в режиме правки
   let draft = null;                 // { weight, reps, rir }
+  const _now = new Date();
+  let calYear = _now.getFullYear(), calMonth = _now.getMonth();   // видимый месяц календаря
+  let calSel = null;                // выбранная дата (детали дня)
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -2781,6 +2858,65 @@ function initAnalytics(root, opts = {}) {
     const ids = new Set();
     for (const s of state.sessions) for (const st of s.sets) ids.add(st.exerciseId);
     return state.exercises.filter((e) => ids.has(e.id));
+  }
+
+  const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  function calendarHtml() {
+    const weeks = An.monthGrid(state, { year: calYear, month: calMonth });
+    const head = An.WEEKDAY_SHORT.map((w) => `<div class="cal-wd">${w}</div>`).join('');
+    const cells = weeks.map((row) => row.map((c) => {
+      const cls = ['cal-cell'];
+      if (!c.inMonth) cls.push('out');
+      if (c.date === todayISO) cls.push('today');
+      if (c.date === calSel) cls.push('sel');
+      const marks = [];
+      if (c.workoutSets) marks.push('<span class="cal-m wo">🏋️</span>');
+      for (const r of c.runs.slice(0, 3)) marks.push(`<span class="cal-dot ${r.hard ? 'hard' : 'easy'}"></span>`);
+      const planned = (!c.workoutSets && c.plannedLabel) ? `<span class="cal-plan">${c.plannedLabel}</span>` : '';
+      return `<button class="${cls.join(' ')}" data-act="cal-day" data-date="${c.date}">
+        <span class="cal-n">${c.dayNum}</span>${planned}
+        <span class="cal-marks">${marks.join('')}</span></button>`;
+    }).join('')).join('');
+
+    return `
+      <section class="an-card">
+        <div class="an-head">
+          <b>Календарь</b>
+          <div class="cal-nav">
+            <button class="mini" data-act="cal-prev">‹</button>
+            <span class="cal-title">${MONTHS[calMonth]} ${calYear}</span>
+            <button class="mini" data-act="cal-next">›</button>
+          </div>
+        </div>
+        <div class="cal-grid">${head}${cells}</div>
+        <div class="cal-legend"><span>🏋️ силовая</span><span><i class="cal-dot easy"></i> лёгкий бег</span><span><i class="cal-dot hard"></i> тяжёлый бег</span><span class="cal-plan">A</span> план</div>
+        ${calDetailHtml()}
+      </section>`;
+  }
+
+  function calDetailHtml() {
+    if (!calSel) return '';
+    const sessions = (state.sessions || []).filter((s) => String(s.date).slice(0, 10) === calSel);
+    const runs = (state.runs || []).filter((r) => String(r.date).slice(0, 10) === calSel);
+    if (!sessions.length && !runs.length) {
+      const planned = An.monthGrid(state, { year: calYear, month: calMonth }).flat().find((c) => c.date === calSel);
+      const p = planned && planned.plannedLabel ? ` По плану: день ${planned.plannedLabel}.` : '';
+      return `<div class="cal-detail"><b>${calSel}</b> — пусто.${p}</div>`;
+    }
+    const parts = [];
+    for (const s of sessions) {
+      const sum = An.RUN_TYPES ? null : null;
+      const nSets = s.sets.filter((x) => !x.isCalibration).length;
+      const exNames = [...new Set(s.sets.map((x) => (St.getExercise(state, x.exerciseId) || { name: x.exerciseId }).name))];
+      parts.push(`<div class="cal-detail-row">🏋️ Силовая · ${nSets} подх · ${exNames.join(', ')}</div>`);
+    }
+    for (const r of runs) {
+      const t = An.RUN_TYPES[r.type] || { label: r.type };
+      parts.push(`<div class="cal-detail-row">🏃 ${t.label} · ${r.distanceKm} км · ${An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec))}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}</div>`);
+    }
+    return `<div class="cal-detail"><b>${calSel}</b>${parts.join('')}</div>`;
   }
 
   function render() {
@@ -2791,6 +2927,8 @@ function initAnalytics(root, opts = {}) {
     root.innerHTML = `
       <div class="an-screen">
         <div class="wk-title">Аналитика</div>
+
+        ${calendarHtml()}
 
         <section class="an-card">
           <div class="an-head">
@@ -2958,7 +3096,10 @@ function initAnalytics(root, opts = {}) {
     const act = btn.dataset.act, setId = btn.dataset.set;
     const st = setId ? findSet(setId) : null;
 
-    if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }
+    if (act === 'cal-prev') { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } render(); }
+    else if (act === 'cal-next') { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } render(); }
+    else if (act === 'cal-day') { calSel = calSel === btn.dataset.date ? null : btn.dataset.date; render(); }
+    else if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }
     else if (act === 'cancel-set') { editing = null; draft = null; render(); }
     else if (act === 'e-' || act === 'e+') { stepDraft(btn.dataset.field, act === 'e+' ? 1 : -1, st); render(); }
     else if (act === 'save-set' && st) { persist(St.updateSet(state, setId, { weight: draft.weight, reps: draft.reps, rir: draft.rir })); editing = null; draft = null; }

@@ -350,8 +350,9 @@ function initProgram(root, opts = {}) {
   function pickExercise(exId) {
     const ex = St.getExercise(state, exId);
     if (!ex || !picker) return;
-    persist(St.addDayItem(state, picker.dayId, defaultItemFor(ex)));
-    picker = null;
+    const dayId = picker.dayId;
+    picker = null;                 // закрыть оверлей ДО persist — persist перерисовывает экран
+    persist(St.addDayItem(state, dayId, defaultItemFor(ex)));
   }
 
   function createCustom() {

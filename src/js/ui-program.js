@@ -142,7 +142,7 @@ function initProgram(root, opts = {}) {
       return `
         <div class="prog-item" data-day="${d.id}" data-idx="${i}">
           <div class="pi-top">
-            <div class="pi-name">${ex.name}</div>
+            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a></div>
             <div class="pi-ord">
               <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
               <button class="mini" data-act="down" data-day="${d.id}" data-idx="${i}">↓</button>

@@ -96,6 +96,16 @@ function getExercise(state, id) {
   return state.exercises.find((e) => e.id === id) || null;
 }
 
+/** Ссылка на видео техники: поле video упражнения или YouTube-поиск по названию.
+ *  Поиск не протухает (в отличие от ссылок на конкретные ролики) и работает
+ *  для пользовательских упражнений. */
+function videoUrl(exercise) {
+  if (!exercise) return null;
+  if (exercise.video) return exercise.video;
+  return 'https://www.youtube.com/results?search_query=' +
+    encodeURIComponent(exercise.name + ' техника выполнения');
+}
+
 function searchExercises(state, { query = '', muscle = null } = {}) {
   const q = query.trim().toLowerCase();
   return state.exercises.filter((e) => {
@@ -107,5 +117,5 @@ function searchExercises(state, { query = '', muscle = null } = {}) {
 
 /* export для node-тестов; в браузере — глобальные объявления */
 if (typeof module !== 'undefined') {
-  module.exports = { EXERCISE_LIBRARY, MUSCLE_LABELS, getExercise, searchExercises };
+  module.exports = { EXERCISE_LIBRARY, MUSCLE_LABELS, getExercise, searchExercises, videoUrl };
 }

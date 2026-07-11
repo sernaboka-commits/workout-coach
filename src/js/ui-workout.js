@@ -302,7 +302,8 @@ function initWorkout(root, opts = {}) {
         <section class="ex-card${plan.mode === 'done' ? ' complete' : ''}">
           <div class="ex-head">
             <div class="ex-name">${ex.name} ${badge}</div>
-            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}</div>
+            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}
+              · <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬 видео</a></div>
           </div>
           ${prevLine}
           ${rows}

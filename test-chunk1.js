@@ -22,6 +22,12 @@ t('все 6 мышечных групп покрыты', () => {
   const groups = new Set(ex.EXERCISE_LIBRARY.map(e => e.primaryMuscle));
   assert(groups.size === 6, [...groups].join(','));
 });
+t('videoUrl: youtube-поиск по названию, поле video приоритетнее', () => {
+  const u = ex.videoUrl({ name: 'Жим штанги лёжа' });
+  assert(u.startsWith('https://www.youtube.com/results?search_query=') && u.includes(encodeURIComponent('Жим штанги лёжа')), u);
+  assert(ex.videoUrl({ name: 'X', video: 'https://youtu.be/abc' }) === 'https://youtu.be/abc');
+  assert(ex.videoUrl(null) === null);
+});
 t('поиск: "жим" + фильтр chest', () => {
   const s = { exercises: ex.EXERCISE_LIBRARY };
   const r = ex.searchExercises(s, { query: 'жим', muscle: 'chest' });

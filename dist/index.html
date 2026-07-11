@@ -94,6 +94,10 @@ html, body {
 }
 .day-tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* --- ссылка на видео техники --- */
+.vid-link { color: var(--accent); text-decoration: none; font-size: 12.5px; white-space: nowrap; }
+.vid-link:active { opacity: .7; }
+
 /* --- «прошлый раз» на карточке упражнения --- */
 .prev-line {
   color: var(--muted); font-size: 13px; margin: 8px 0 0;
@@ -492,6 +496,16 @@ function getExercise(state, id) {
   return state.exercises.find((e) => e.id === id) || null;
 }
 
+/** Ссылка на видео техники: поле video упражнения или YouTube-поиск по названию.
+ *  Поиск не протухает (в отличие от ссылок на конкретные ролики) и работает
+ *  для пользовательских упражнений. */
+function videoUrl(exercise) {
+  if (!exercise) return null;
+  if (exercise.video) return exercise.video;
+  return 'https://www.youtube.com/results?search_query=' +
+    encodeURIComponent(exercise.name + ' техника выполнения');
+}
+
 function searchExercises(state, { query = '', muscle = null } = {}) {
   const q = query.trim().toLowerCase();
   return state.exercises.filter((e) => {
@@ -503,7 +517,7 @@ function searchExercises(state, { query = '', muscle = null } = {}) {
 
 /* export для node-тестов; в браузере — глобальные объявления */
 if (typeof module !== 'undefined') {
-  module.exports = { EXERCISE_LIBRARY, MUSCLE_LABELS, getExercise, searchExercises };
+  module.exports = { EXERCISE_LIBRARY, MUSCLE_LABELS, getExercise, searchExercises, videoUrl };
 }
 
 </script>
@@ -1762,7 +1776,8 @@ function initWorkout(root, opts = {}) {
         <section class="ex-card${plan.mode === 'done' ? ' complete' : ''}">
           <div class="ex-head">
             <div class="ex-name">${ex.name} ${badge}</div>
-            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}</div>
+            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}
+              · <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬 видео</a></div>
           </div>
           ${prevLine}
           ${rows}
@@ -2081,7 +2096,7 @@ function initProgram(root, opts = {}) {
       return `
         <div class="prog-item" data-day="${d.id}" data-idx="${i}">
           <div class="pi-top">
-            <div class="pi-name">${ex.name}</div>
+            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a></div>
             <div class="pi-ord">
               <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
               <button class="mini" data-act="down" data-day="${d.id}" data-idx="${i}">↓</button>

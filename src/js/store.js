@@ -25,6 +25,9 @@ function defaultState(exerciseLibrary) {
       weightStepDefault: 2.5,
       backupReminderDays: 14,
       lastBackupAt: null,
+      age: null,          // для оценки ЧССmax (v2)
+      hrMax: null,        // пульс макс, уд/мин
+      hrRest: null,       // пульс покоя, уд/мин (метод Карвонена)
     },
     exercises: exerciseLibrary.map((e) => ({ ...e, isCustom: false })),
     program: { days: [] },          // конструктор заполнит A/B/C
@@ -330,6 +333,17 @@ function deleteRun(state, runId) {
   return { ...state, runs: (state.runs || []).filter((r) => r.id !== runId) };
 }
 
+/** Правка настроек (числовые поля; пустое → null). */
+function updateSettings(state, patch) {
+  const allowed = ['weightStepDefault', 'backupReminderDays', 'age', 'hrMax', 'hrRest'];
+  const clean = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (!allowed.includes(k)) continue;
+    clean[k] = (v === '' || v == null) ? null : Number(v);
+  }
+  return { ...state, settings: { ...state.settings, ...clean } };
+}
+
 /* ---------- пользовательские упражнения ---------- */
 
 function addCustomExercise(state, ex) {
@@ -363,6 +377,6 @@ if (typeof module !== 'undefined') {
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
-    addRun, deleteRun,
+    addRun, deleteRun, updateSettings,
   };
 }

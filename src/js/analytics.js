@@ -229,10 +229,62 @@ function rampWarning(prevKm, lastKm) {
   return prevKm >= 5 && lastKm > prevKm * 1.1;
 }
 
+/* ---------- пульсовые зоны ----------
+ * 5 зон. С пульсом покоя — метод Карвонена (резерв ЧСС, самый
+ * индивидуальный); без него — доля от ЧССmax. Оценка ЧССmax по
+ * Танаке (208 − 0.7·возраст) точнее классической 220−возраст.
+ */
+const HR_ZONES = [
+  { n: 1, name: 'Восстановление', lo: 0.50, hi: 0.60, use: 'восстановит. бег, разминка' },
+  { n: 2, name: 'Аэробная база',  lo: 0.60, hi: 0.70, use: 'лёгкий/длинный (основа объёма)' },
+  { n: 3, name: 'Темповая',       lo: 0.70, hi: 0.80, use: 'темповый, «комфортно тяжело»' },
+  { n: 4, name: 'Порог (ПАНО)',   lo: 0.80, hi: 0.90, use: 'пороговые, длинные интервалы' },
+  { n: 5, name: 'МПК (VO2max)',   lo: 0.90, hi: 1.00, use: 'короткие интервалы, повторы' },
+];
+
+/* целевые зоны по типу пробежки — для подсказки о несоответствии */
+const RUN_ZONE_TARGET = {
+  recovery: [1, 2], easy: [1, 3], long: [2, 3], tempo: [3, 4], interval: [4, 5], reps: [4, 5],
+};
+
+function hrMaxTanaka(age) {
+  return Math.round(208 - 0.7 * Number(age));
+}
+
+/** ЧСС для доли интенсивности: Карвонен при наличии пульса покоя. */
+function hrTarget(pct, hrMax, hrRest) {
+  return Math.round(hrRest ? hrRest + pct * (hrMax - hrRest) : pct * hrMax);
+}
+
+/** Таблица зон в ударах/мин. → [{ n, name, lo, hi, use }] или null. */
+function hrZones({ hrMax, hrRest } = {}) {
+  if (!(hrMax > 0)) return null;
+  const rest = hrRest > 0 ? hrRest : 0;
+  return HR_ZONES.map((z) => ({ n: z.n, name: z.name, use: z.use, lo: hrTarget(z.lo, hrMax, rest), hi: hrTarget(z.hi, hrMax, rest) }));
+}
+
+/** Номер зоны (1–5) для конкретного пульса. */
+function hrZoneFor(hr, cfg) {
+  const zs = hrZones(cfg);
+  if (!zs || !(hr > 0)) return null;
+  for (const z of zs) if (hr <= z.hi) return z.n;
+  return 5;
+}
+
+/** Подсказка, если фактическая зона не совпала с типом пробежки. */
+function zoneAdvice(type, zone) {
+  const t = RUN_ZONE_TARGET[type];
+  if (!t || !zone) return '';
+  if (zone < t[0]) return 'легче, чем задумано';
+  if (zone > t[1]) return 'интенсивнее, чем нужно для этого типа';
+  return '';
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
+    HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
   };
 }

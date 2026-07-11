@@ -388,6 +388,28 @@ html, body {
 .run-main span { color: var(--muted); font-size: 13px; }
 .run-main small { color: var(--muted); font-size: 12px; opacity: .85; }
 
+/* --- пульсовые зоны --- */
+.hr-zones { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 2px; }
+.hr-zone {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--surface-2); border-radius: 8px; border-left: 4px solid var(--muted);
+}
+.hz-n { font-weight: 800; font-size: 13px; width: 26px; }
+.hz-name { font-weight: 600; font-size: 13px; }
+.hz-use { flex: 1; color: var(--muted); font-size: 11.5px; }
+.hz-bpm { font-weight: 700; font-size: 14px; white-space: nowrap; }
+/* цвета зон: от аэробной (зелёный) к анаэробной (красный) */
+.hr-zone.z1 { border-left-color: #6ea8ff; }
+.hr-zone.z2 { border-left-color: var(--ok); }
+.hr-zone.z3 { border-left-color: #b6d94c; }
+.hr-zone.z4 { border-left-color: var(--warn); }
+.hr-zone.z5 { border-left-color: var(--danger); }
+
+.zbadge { font-weight: 800; }
+.zbadge.z1 { color: #6ea8ff; } .zbadge.z2 { color: var(--ok); }
+.zbadge.z3 { color: #b6d94c; } .zbadge.z4 { color: var(--warn); } .zbadge.z5 { color: var(--danger); }
+.zadvice { color: var(--warn) !important; }
+
 /* «нудж» на вкладке настроек, если бэкап просрочен */
 .nav button.nudge { position: relative; }
 .nav button.nudge::after {
@@ -587,6 +609,9 @@ function defaultState(exerciseLibrary) {
       weightStepDefault: 2.5,
       backupReminderDays: 14,
       lastBackupAt: null,
+      age: null,          // для оценки ЧССmax (v2)
+      hrMax: null,        // пульс макс, уд/мин
+      hrRest: null,       // пульс покоя, уд/мин (метод Карвонена)
     },
     exercises: exerciseLibrary.map((e) => ({ ...e, isCustom: false })),
     program: { days: [] },          // конструктор заполнит A/B/C
@@ -892,6 +917,17 @@ function deleteRun(state, runId) {
   return { ...state, runs: (state.runs || []).filter((r) => r.id !== runId) };
 }
 
+/** Правка настроек (числовые поля; пустое → null). */
+function updateSettings(state, patch) {
+  const allowed = ['weightStepDefault', 'backupReminderDays', 'age', 'hrMax', 'hrRest'];
+  const clean = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (!allowed.includes(k)) continue;
+    clean[k] = (v === '' || v == null) ? null : Number(v);
+  }
+  return { ...state, settings: { ...state.settings, ...clean } };
+}
+
 /* ---------- пользовательские упражнения ---------- */
 
 function addCustomExercise(state, ex) {
@@ -925,7 +961,7 @@ if (typeof module !== 'undefined') {
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,
     addCustomExercise, deleteCustomExercise,
-    addRun, deleteRun,
+    addRun, deleteRun, updateSettings,
   };
 }
 
@@ -1432,11 +1468,63 @@ function rampWarning(prevKm, lastKm) {
   return prevKm >= 5 && lastKm > prevKm * 1.1;
 }
 
+/* ---------- пульсовые зоны ----------
+ * 5 зон. С пульсом покоя — метод Карвонена (резерв ЧСС, самый
+ * индивидуальный); без него — доля от ЧССmax. Оценка ЧССmax по
+ * Танаке (208 − 0.7·возраст) точнее классической 220−возраст.
+ */
+const HR_ZONES = [
+  { n: 1, name: 'Восстановление', lo: 0.50, hi: 0.60, use: 'восстановит. бег, разминка' },
+  { n: 2, name: 'Аэробная база',  lo: 0.60, hi: 0.70, use: 'лёгкий/длинный (основа объёма)' },
+  { n: 3, name: 'Темповая',       lo: 0.70, hi: 0.80, use: 'темповый, «комфортно тяжело»' },
+  { n: 4, name: 'Порог (ПАНО)',   lo: 0.80, hi: 0.90, use: 'пороговые, длинные интервалы' },
+  { n: 5, name: 'МПК (VO2max)',   lo: 0.90, hi: 1.00, use: 'короткие интервалы, повторы' },
+];
+
+/* целевые зоны по типу пробежки — для подсказки о несоответствии */
+const RUN_ZONE_TARGET = {
+  recovery: [1, 2], easy: [1, 3], long: [2, 3], tempo: [3, 4], interval: [4, 5], reps: [4, 5],
+};
+
+function hrMaxTanaka(age) {
+  return Math.round(208 - 0.7 * Number(age));
+}
+
+/** ЧСС для доли интенсивности: Карвонен при наличии пульса покоя. */
+function hrTarget(pct, hrMax, hrRest) {
+  return Math.round(hrRest ? hrRest + pct * (hrMax - hrRest) : pct * hrMax);
+}
+
+/** Таблица зон в ударах/мин. → [{ n, name, lo, hi, use }] или null. */
+function hrZones({ hrMax, hrRest } = {}) {
+  if (!(hrMax > 0)) return null;
+  const rest = hrRest > 0 ? hrRest : 0;
+  return HR_ZONES.map((z) => ({ n: z.n, name: z.name, use: z.use, lo: hrTarget(z.lo, hrMax, rest), hi: hrTarget(z.hi, hrMax, rest) }));
+}
+
+/** Номер зоны (1–5) для конкретного пульса. */
+function hrZoneFor(hr, cfg) {
+  const zs = hrZones(cfg);
+  if (!zs || !(hr > 0)) return null;
+  for (const z of zs) if (hr <= z.hi) return z.n;
+  return 5;
+}
+
+/** Подсказка, если фактическая зона не совпала с типом пробежки. */
+function zoneAdvice(type, zone) {
+  const t = RUN_ZONE_TARGET[type];
+  if (!t || !zone) return '';
+  if (zone < t[0]) return 'легче, чем задумано';
+  if (zone > t[1]) return 'интенсивнее, чем нужно для этого типа';
+  return '';
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
+    HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
   };
 }
 
@@ -2817,7 +2905,14 @@ function initRun(root, opts = {}) {
   const St = opts.store || { save, addRun, deleteRun };
   const An = opts.analytics || {
     RUN_TYPES, fmtPace, paceSecKm, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
+    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
   };
+
+  function hrCfg() {
+    const s = state.settings || {};
+    const hrMax = s.hrMax || (s.age ? An.hrMaxTanaka(s.age) : null);
+    return { hrMax, hrRest: s.hrRest };
+  }
   const onCommit = opts.onCommit || function () {};
   let state = opts.state;
 
@@ -2870,6 +2965,8 @@ function initRun(root, opts = {}) {
           ${ramp ? '<div class="cx-err" style="margin-top:8px">⚠ Объём прошлой недели вырос >10% к позапрошлой — следи за восстановлением (правило ~10%).</div>' : ''}
         </section>
 
+        ${zonesCardHtml()}
+
         <section class="an-card">
           <div class="an-head"><b>Км в неделю</b><small>8 недель</small></div>
           <canvas id="run-vol" class="chart"></canvas>
@@ -2890,6 +2987,20 @@ function initRun(root, opts = {}) {
     drawPace(root.querySelector('#run-pace'), An.easyPaceSeries(state));
   }
 
+  function zonesCardHtml() {
+    const zones = An.hrZones(hrCfg());
+    if (!zones) return `<section class="an-card"><div class="an-head"><b>Пульсовые зоны</b></div>
+      <div class="pi-empty">Настрой пульс в <b>Настройках</b> — покажу целевые зоны по пульсу.</div></section>`;
+    return `<section class="an-card">
+      <div class="an-head"><b>Мои пульсовые зоны</b><small>уд/мин</small></div>
+      <div class="hr-zones">${zones.map((z) =>
+        `<div class="hr-zone z${z.n}"><span class="hz-n">Z${z.n}</span>
+           <span class="hz-name">${z.name}</span>
+           <span class="hz-use">${z.use}</span>
+           <span class="hz-bpm">${z.lo}–${z.hi}</span></div>`).join('')}</div>
+    </section>`;
+  }
+
   function numField(id, label, value, step, ph) {
     return `<label class="run-f"><small>${label}</small>
       <input class="in" id="run-${id}" type="number" inputmode="decimal" step="${step}" min="0" placeholder="${ph}" value="${value}"></label>`;
@@ -2898,13 +3009,18 @@ function initRun(root, opts = {}) {
   function runListHtml() {
     const runs = [...(state.runs || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
     if (!runs.length) return '<div class="pi-empty">Пока нет пробежек.</div>';
+    const cfg = hrCfg();
     return runs.map((r) => {
       const t = An.RUN_TYPES[r.type] || { label: r.type, hard: false };
       const pace = An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec));
+      const zone = r.avgHr ? An.hrZoneFor(r.avgHr, cfg) : null;
+      const advice = zone ? An.zoneAdvice(r.type, zone) : '';
+      const zoneTag = zone ? ` · <b class="zbadge z${zone}">Z${zone}</b>` : '';
       return `<div class="run-row${t.hard ? ' hard' : ''}">
         <div class="run-main">
           <b>${String(r.date).slice(0, 10)} · ${t.label}</b>
-          <span>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}${r.rpe ? ' · RPE ' + r.rpe : ''}</span>
+          <span>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' + zoneTag : ''}${r.rpe ? ' · RPE ' + r.rpe : ''}</span>
+          ${advice ? `<small class="zadvice">⚠ ${advice}</small>` : ''}
           ${r.intervals ? `<small>${r.intervals}</small>` : ''}${r.note ? `<small>${r.note}</small>` : ''}
         </div>
         <button class="mini" data-act="del-run" data-id="${r.id}">✕</button>
@@ -3043,6 +3159,22 @@ function initApp() {
 
   /* ---------- экран настроек: мезоцикл + бэкап ---------- */
 
+  function effectiveHrMax() {
+    const s = state.settings;
+    return s.hrMax || (s.age ? hrMaxTanaka(s.age) : null);
+  }
+
+  function hrZonesHtml() {
+    const zones = hrZones({ hrMax: effectiveHrMax(), hrRest: state.settings.hrRest });
+    if (!zones) return '<div class="pi-empty">Укажи возраст или пульс макс — покажу твои зоны.</div>';
+    const method = state.settings.hrRest ? 'Карвонен (резерв ЧСС)' : '% от ЧССmax';
+    return `<div class="hr-zones">${zones.map((z) =>
+      `<div class="hr-zone z${z.n}"><span class="hz-n">Z${z.n}</span>
+         <span class="hz-name">${z.name}</span>
+         <span class="hz-bpm">${z.lo}–${z.hi}</span></div>`).join('')}</div>
+      <div class="meso-hint">Метод: ${method}. ЧССmax ${effectiveHrMax()}${state.settings.hrRest ? ', покой ' + state.settings.hrRest : ''} уд/мин.</div>`;
+  }
+
   function renderSettings(root) {
     const m = mesoStatus(state);
     const overdue = backupOverdue(state);
@@ -3068,6 +3200,17 @@ function initApp() {
         </section>
 
         <section class="an-card">
+          <div class="an-head"><b>Пульсовые зоны</b></div>
+          <div class="run-grid">
+            <label class="run-f"><small>возраст</small><input class="in" id="hr-age" type="number" inputmode="numeric" min="10" max="99" placeholder="напр. 46" value="${state.settings.age || ''}"></label>
+            <label class="run-f"><small>пульс макс</small><input class="in" id="hr-max" type="number" inputmode="numeric" min="120" max="220" placeholder="${state.settings.age ? '≈' + hrMaxTanaka(state.settings.age) : 'или возраст'}" value="${state.settings.hrMax || ''}"></label>
+            <label class="run-f"><small>пульс покоя</small><input class="in" id="hr-rest" type="number" inputmode="numeric" min="30" max="100" placeholder="опц." value="${state.settings.hrRest || ''}"></label>
+          </div>
+          ${hrZonesHtml()}
+          <div class="meso-hint">Не знаешь макс? Впиши возраст — прикинем по формуле Танаки (208−0.7·возраст). Пульс покоя (утром, лёжа) уточняет зоны методом Карвонена (по резерву ЧСС).</div>
+        </section>
+
+        <section class="an-card">
           <div class="an-head"><b>Бэкап данных</b></div>
           ${overdue ? '<div class="cx-err" style="color:var(--warn)">Пора сделать бэкап — данные хранятся только в этом браузере.</div>' : ''}
           <div class="meso-hint">Последний бэкап: ${last}. Сессий: ${state.sessions.length}.</div>
@@ -3089,6 +3232,15 @@ function initApp() {
       else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
       else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }
       else if (act === 'export') { doExport(root); }
+    };
+
+    // правка пульсовых настроек — по завершении ввода, с пересчётом таблицы зон
+    root.onchange = (e) => {
+      const map = { 'hr-age': 'age', 'hr-max': 'hrMax', 'hr-rest': 'hrRest' };
+      const field = map[e.target.id];
+      if (!field) return;
+      state = updateSettings(state, { [field]: e.target.value });
+      save(state); renderSettings(root);
     };
 
     const fileInput = root.querySelector('#import-file');

@@ -37,6 +37,22 @@ function initApp() {
 
   /* ---------- экран настроек: мезоцикл + бэкап ---------- */
 
+  function effectiveHrMax() {
+    const s = state.settings;
+    return s.hrMax || (s.age ? hrMaxTanaka(s.age) : null);
+  }
+
+  function hrZonesHtml() {
+    const zones = hrZones({ hrMax: effectiveHrMax(), hrRest: state.settings.hrRest });
+    if (!zones) return '<div class="pi-empty">Укажи возраст или пульс макс — покажу твои зоны.</div>';
+    const method = state.settings.hrRest ? 'Карвонен (резерв ЧСС)' : '% от ЧССmax';
+    return `<div class="hr-zones">${zones.map((z) =>
+      `<div class="hr-zone z${z.n}"><span class="hz-n">Z${z.n}</span>
+         <span class="hz-name">${z.name}</span>
+         <span class="hz-bpm">${z.lo}–${z.hi}</span></div>`).join('')}</div>
+      <div class="meso-hint">Метод: ${method}. ЧССmax ${effectiveHrMax()}${state.settings.hrRest ? ', покой ' + state.settings.hrRest : ''} уд/мин.</div>`;
+  }
+
   function renderSettings(root) {
     const m = mesoStatus(state);
     const overdue = backupOverdue(state);
@@ -62,6 +78,17 @@ function initApp() {
         </section>
 
         <section class="an-card">
+          <div class="an-head"><b>Пульсовые зоны</b></div>
+          <div class="run-grid">
+            <label class="run-f"><small>возраст</small><input class="in" id="hr-age" type="number" inputmode="numeric" min="10" max="99" placeholder="напр. 46" value="${state.settings.age || ''}"></label>
+            <label class="run-f"><small>пульс макс</small><input class="in" id="hr-max" type="number" inputmode="numeric" min="120" max="220" placeholder="${state.settings.age ? '≈' + hrMaxTanaka(state.settings.age) : 'или возраст'}" value="${state.settings.hrMax || ''}"></label>
+            <label class="run-f"><small>пульс покоя</small><input class="in" id="hr-rest" type="number" inputmode="numeric" min="30" max="100" placeholder="опц." value="${state.settings.hrRest || ''}"></label>
+          </div>
+          ${hrZonesHtml()}
+          <div class="meso-hint">Не знаешь макс? Впиши возраст — прикинем по формуле Танаки (208−0.7·возраст). Пульс покоя (утром, лёжа) уточняет зоны методом Карвонена (по резерву ЧСС).</div>
+        </section>
+
+        <section class="an-card">
           <div class="an-head"><b>Бэкап данных</b></div>
           ${overdue ? '<div class="cx-err" style="color:var(--warn)">Пора сделать бэкап — данные хранятся только в этом браузере.</div>' : ''}
           <div class="meso-hint">Последний бэкап: ${last}. Сессий: ${state.sessions.length}.</div>
@@ -83,6 +110,15 @@ function initApp() {
       else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
       else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }
       else if (act === 'export') { doExport(root); }
+    };
+
+    // правка пульсовых настроек — по завершении ввода, с пересчётом таблицы зон
+    root.onchange = (e) => {
+      const map = { 'hr-age': 'age', 'hr-max': 'hrMax', 'hr-rest': 'hrRest' };
+      const field = map[e.target.id];
+      if (!field) return;
+      state = updateSettings(state, { [field]: e.target.value });
+      save(state); renderSettings(root);
     };
 
     const fileInput = root.querySelector('#import-file');

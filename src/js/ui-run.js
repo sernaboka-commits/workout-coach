@@ -13,7 +13,14 @@ function initRun(root, opts = {}) {
   const St = opts.store || { save, addRun, deleteRun };
   const An = opts.analytics || {
     RUN_TYPES, fmtPace, paceSecKm, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
+    hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,
   };
+
+  function hrCfg() {
+    const s = state.settings || {};
+    const hrMax = s.hrMax || (s.age ? An.hrMaxTanaka(s.age) : null);
+    return { hrMax, hrRest: s.hrRest };
+  }
   const onCommit = opts.onCommit || function () {};
   let state = opts.state;
 
@@ -66,6 +73,8 @@ function initRun(root, opts = {}) {
           ${ramp ? '<div class="cx-err" style="margin-top:8px">⚠ Объём прошлой недели вырос >10% к позапрошлой — следи за восстановлением (правило ~10%).</div>' : ''}
         </section>
 
+        ${zonesCardHtml()}
+
         <section class="an-card">
           <div class="an-head"><b>Км в неделю</b><small>8 недель</small></div>
           <canvas id="run-vol" class="chart"></canvas>
@@ -86,6 +95,20 @@ function initRun(root, opts = {}) {
     drawPace(root.querySelector('#run-pace'), An.easyPaceSeries(state));
   }
 
+  function zonesCardHtml() {
+    const zones = An.hrZones(hrCfg());
+    if (!zones) return `<section class="an-card"><div class="an-head"><b>Пульсовые зоны</b></div>
+      <div class="pi-empty">Настрой пульс в <b>Настройках</b> — покажу целевые зоны по пульсу.</div></section>`;
+    return `<section class="an-card">
+      <div class="an-head"><b>Мои пульсовые зоны</b><small>уд/мин</small></div>
+      <div class="hr-zones">${zones.map((z) =>
+        `<div class="hr-zone z${z.n}"><span class="hz-n">Z${z.n}</span>
+           <span class="hz-name">${z.name}</span>
+           <span class="hz-use">${z.use}</span>
+           <span class="hz-bpm">${z.lo}–${z.hi}</span></div>`).join('')}</div>
+    </section>`;
+  }
+
   function numField(id, label, value, step, ph) {
     return `<label class="run-f"><small>${label}</small>
       <input class="in" id="run-${id}" type="number" inputmode="decimal" step="${step}" min="0" placeholder="${ph}" value="${value}"></label>`;
@@ -94,13 +117,18 @@ function initRun(root, opts = {}) {
   function runListHtml() {
     const runs = [...(state.runs || [])].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
     if (!runs.length) return '<div class="pi-empty">Пока нет пробежек.</div>';
+    const cfg = hrCfg();
     return runs.map((r) => {
       const t = An.RUN_TYPES[r.type] || { label: r.type, hard: false };
       const pace = An.fmtPace(An.paceSecKm(r.distanceKm, r.durationSec));
+      const zone = r.avgHr ? An.hrZoneFor(r.avgHr, cfg) : null;
+      const advice = zone ? An.zoneAdvice(r.type, zone) : '';
+      const zoneTag = zone ? ` · <b class="zbadge z${zone}">Z${zone}</b>` : '';
       return `<div class="run-row${t.hard ? ' hard' : ''}">
         <div class="run-main">
           <b>${String(r.date).slice(0, 10)} · ${t.label}</b>
-          <span>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' : ''}${r.rpe ? ' · RPE ' + r.rpe : ''}</span>
+          <span>${r.distanceKm} км · ${pace}/км${r.avgHr ? ' · ' + r.avgHr + ' уд' + zoneTag : ''}${r.rpe ? ' · RPE ' + r.rpe : ''}</span>
+          ${advice ? `<small class="zadvice">⚠ ${advice}</small>` : ''}
           ${r.intervals ? `<small>${r.intervals}</small>` : ''}${r.note ? `<small>${r.note}</small>` : ''}
         </div>
         <button class="mini" data-act="del-run" data-id="${r.id}">✕</button>

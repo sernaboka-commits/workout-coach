@@ -1256,6 +1256,156 @@ if (typeof module !== 'undefined') {
 </script>
   <script>
 /* ============================================================
+ * program-gen.js — генератор программы (чистые функции, без DOM)
+ * Контракт: generateProgram(opts, library) → { days, note }
+ *   opts: { sex:'m'|'f', goal:'hypertrophy'|'strength'|'fitness',
+ *           daysPerWeek:2..5, minutes:45|60|90, split:'auto'|'full'|'split' }
+ *   days: [{ key, label, items:[DayItem], estMinutes }]
+ *
+ * Заложенные принципы (evidence-based, мета-анализы Schoenfeld et al.,
+ * рекомендации Israetel/RP, Helms, Nippard):
+ *   - объём 10–20 рабочих сетов на группу в неделю, частота ≥2×/нед
+ *   - работа близко к отказу (RIR 1–3 — рампу ведёт движок мезоцикла)
+ *   - гипертрофия: база 6–10 повт, изоляция 10–15; сила: 3–6; тонус: 10–20
+ *   - отдых: база 2–3.5 мин, изоляция ~1.5 мин
+ *   - приоритет упражнениям с нагрузкой в растянутой позиции
+ *     (наклонный жим, румынская тяга, сгибания лёжа, французский из-за головы)
+ *   - пол меняет акцент отбора, не принципы: Ж — ноги/ягодичные/дельты,
+ *     М — грудь/руки/плечи (физиология роста одинакова)
+ * ============================================================ */
+
+/* ---------- параметры по цели ---------- */
+
+const GEN_GOALS = {
+  hypertrophy: {
+    label: 'Гипертрофия',
+    compound:  { min: 6,  max: 10, rest: 180, sets: 3 },
+    isolation: { min: 10, max: 15, rest: 90,  sets: 3 },
+    hint: 'база 6–10, изоляция 10–15, близко к отказу',
+  },
+  strength: {
+    label: 'Сила',
+    compound:  { min: 3, max: 6,  rest: 210, sets: 4 },
+    isolation: { min: 6, max: 10, rest: 120, sets: 3 },
+    hint: 'тяжёлая база 3–6 повт, длинный отдых',
+  },
+  fitness: {
+    label: 'Тонус',
+    compound:  { min: 10, max: 15, rest: 120, sets: 3 },
+    isolation: { min: 12, max: 20, rest: 75,  sets: 3 },
+    hint: 'умеренные веса, короче отдых, больше повторов',
+  },
+};
+
+/* ---------- пулы упражнений по типам дня (в порядке приоритета) ---------- */
+
+const GEN_POOLS = {
+  // фулбади: 3 ротации, каждая группа 2–3×/нед
+  fullA: ['bb-squat', 'bb-bench-press', 'bb-row', 'db-shoulder-press', 'leg-curl', 'cable-pushdown', 'cable-crunch', 'hip-thrust'],
+  fullB: ['romanian-dl', 'incline-db-press', 'lat-pulldown', 'lateral-raise', 'leg-extension', 'bb-curl', 'bulgarian-split', 'hanging-leg-raise'],
+  fullC: ['leg-press', 'db-bench-press', 'seated-cable-row', 'ohp', 'hip-thrust', 'hammer-curl', 'calf-raise', 'ab-wheel'],
+  // верх/низ
+  upper:  ['bb-bench-press', 'bb-row', 'ohp', 'lat-pulldown', 'cable-fly', 'lateral-raise', 'bb-curl', 'cable-pushdown', 'face-pull'],
+  lower:  ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'hip-thrust', 'leg-extension', 'calf-raise', 'cable-crunch'],
+  upper2: ['incline-db-press', 'seated-cable-row', 'db-shoulder-press', 'pull-up', 'pec-deck', 'rear-delt-fly', 'hammer-curl', 'overhead-ext'],
+  lower2: ['deadlift', 'hip-thrust', 'bulgarian-split', 'leg-curl', 'walking-lunge', 'leg-extension', 'calf-raise', 'hanging-leg-raise'],
+  // пуш/пул/ноги
+  push: ['bb-bench-press', 'ohp', 'incline-db-press', 'cable-fly', 'lateral-raise', 'overhead-ext', 'cable-pushdown'],
+  pull: ['lat-pulldown', 'bb-row', 'seated-cable-row', 'face-pull', 'bb-curl', 'hammer-curl', 'straight-arm-pd'],
+  legs: ['bb-squat', 'romanian-dl', 'leg-press', 'leg-curl', 'hip-thrust', 'leg-extension', 'calf-raise'],
+};
+
+const GEN_LABELS = {
+  fullA: 'A', fullB: 'B', fullC: 'C',
+  upper: 'Верх', lower: 'Низ', upper2: 'Верх 2', lower2: 'Низ 2',
+  push: 'Пуш', pull: 'Пул', legs: 'Ноги',
+};
+
+/* акценты по полу: сдвигают приоритет отбора, когда время ограничено */
+const GEN_F_BOOST = ['hip-thrust', 'romanian-dl', 'bulgarian-split', 'leg-curl', 'leg-press', 'walking-lunge', 'calf-raise', 'hyperextension', 'lateral-raise', 'cable-lateral'];
+const GEN_M_BOOST = ['bb-bench-press', 'incline-db-press', 'ohp', 'bb-curl', 'hammer-curl', 'cable-pushdown', 'overhead-ext', 'lateral-raise'];
+
+/* ---------- выбор сплита ---------- */
+
+function genPickSplit(daysPerWeek, pref) {
+  const n = Math.min(5, Math.max(2, daysPerWeek));
+  const FULL = { 2: ['fullA', 'fullB'], 3: ['fullA', 'fullB', 'fullC'], 4: ['fullA', 'fullB', 'fullC', 'fullA'], 5: ['fullA', 'fullB', 'fullC', 'fullA', 'fullB'] };
+  const SPLIT = { 2: ['upper', 'lower'], 3: ['push', 'pull', 'legs'], 4: ['upper', 'lower', 'upper2', 'lower2'], 5: ['upper', 'lower', 'push', 'pull', 'legs'] };
+  // авто: ≤3 дней частотнее и эффективнее фулбади; 4–5 — по группам
+  const mode = pref === 'full' || (pref !== 'split' && n <= 3) ? FULL : SPLIT;
+  return mode[n];
+}
+
+/* ---------- оценка длительности тренировки ---------- */
+
+/** Минуты на день: сет ~45с + отдых, плюс ~1.5 мин на смену снаряда. */
+function genEstimateMin(items) {
+  return items.reduce((m, it) => m + it.workSets * (0.75 + it.restSec / 60) + 1.5, 0);
+}
+
+/* ---------- генерация ---------- */
+
+function generateProgram(opts, library) {
+  const sex = opts.sex === 'f' ? 'f' : 'm';
+  const goal = GEN_GOALS[opts.goal] ? opts.goal : 'hypertrophy';
+  const g = GEN_GOALS[goal];
+  const minutes = Number(opts.minutes) || 60;
+  const budget = Math.max(25, minutes - 8);           // минус разминка
+  const byId = {};
+  for (const e of library) byId[e.id] = e;
+  const boost = sex === 'f' ? GEN_F_BOOST : GEN_M_BOOST;
+
+  const keys = genPickSplit(opts.daysPerWeek, opts.split || 'auto');
+  const seenLabels = new Set();
+
+  const days = keys.map((key, di) => {
+    // приоритет: позиция в пуле, акцент пола −1.5; для «силы» изоляция −в конец
+    const scored = GEN_POOLS[key]
+      .filter((id) => byId[id])
+      .map((id, i) => {
+        let score = i;
+        if (boost.includes(id)) score -= 1.5;
+        if (goal === 'strength' && byId[id].kind === 'isolation') score += 3;
+        return { id, score };
+      })
+      .sort((a, b) => a.score - b.score);
+
+    // собираем упражнения, пока влезаем в бюджет времени (минимум 3)
+    const items = [];
+    for (const { id } of scored) {
+      const p = byId[id].kind === 'compound' ? g.compound : g.isolation;
+      const item = {
+        exerciseId: id,
+        repRangeMin: p.min, repRangeMax: p.max,
+        workSets: p.sets, targetRIR: 2, restSec: p.rest,
+      };
+      if (items.length >= 3 && genEstimateMin([...items, item]) > budget) continue;
+      items.push(item);
+      if (genEstimateMin(items) >= budget) break;
+    }
+
+    // метка: у сплитов своя, у фулбади при повторе ключа — следующая буква
+    let label = GEN_LABELS[key] || 'ABCDE'[di];
+    while (seenLabels.has(label)) label = 'ABCDE'[di] || label + '′';
+    seenLabels.add(label);
+
+    return { key, label, items, estMinutes: Math.round(genEstimateMin(items)) };
+  });
+
+  const note = `${g.label}: ${g.hint}. Объём ~10–20 сетов/группу в неделю, каждая группа ≥2×/нед. `
+    + (sex === 'f' ? 'Акцент: ноги/ягодичные/дельты.' : 'Акцент: грудь/спина/руки.');
+
+  return { days, note, goal, sex, minutes };
+}
+
+/* export для node-тестов; в браузере — глобальные объявления */
+if (typeof module !== 'undefined') {
+  module.exports = { GEN_GOALS, GEN_POOLS, GEN_LABELS, genPickSplit, genEstimateMin, generateProgram };
+}
+
+</script>
+  <script>
+/* ============================================================
  * ui-workout.js — экран активной тренировки + таймер отдыха
  * DOM-код изолирован в initWorkout(); чистые хелперы экспортируются
  * отдельно (тестируются node-ом без DOM).
@@ -1796,7 +1946,7 @@ function initProgram(root, opts = {}) {
   let state = opts.state || St.load(lib());
   let picker = null;   // { dayId } когда открыт выбор упражнения
   let query = '', muscle = null, customOpen = false;
-  let wiz = { count: 3, days: [] };   // мастер создания программы
+  let wiz = { count: 3, days: [], sex: 'm', goal: 'hypertrophy', time: 60, split: 'auto' };   // мастер создания программы
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -1812,7 +1962,10 @@ function initProgram(root, opts = {}) {
       <div class="prog-screen">
         <div class="prog-top">
           <div class="wk-title">Программа</div>
-          <button class="btn" data-act="add-day">+ день</button>
+          <div>
+            <button class="btn ghost sm" data-act="wiz-reset">🪄 Мастер</button>
+            <button class="btn sm" data-act="add-day">+ день</button>
+          </div>
         </div>
         ${daysHtml}
       </div>
@@ -1822,17 +1975,50 @@ function initProgram(root, opts = {}) {
   function wizardHtml() {
     const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
     const picked = wiz.days.length;
+    const opt = (act, val, cur, label) =>
+      `<button class="chip${cur === val ? ' on' : ''}" data-act="${act}" data-v="${val}">${label}</button>`;
     return `
       <div class="wk-title" style="padding:6px 4px 12px">Новая программа</div>
       <section class="day-card">
-        <div class="wiz-step"><b>1.</b> Сколько тренировок в неделю?</div>
+        <div class="wiz-step"><b>1.</b> Пол</div>
+        <div class="chips">${opt('wiz-sex', 'm', wiz.sex, 'Мужчина')}${opt('wiz-sex', 'f', wiz.sex, 'Женщина')}</div>
+
+        <div class="wiz-step"><b>2.</b> Цель</div>
+        <div class="chips">
+          ${opt('wiz-goal', 'hypertrophy', wiz.goal, 'Рост мышц')}
+          ${opt('wiz-goal', 'strength', wiz.goal, 'Сила')}
+          ${opt('wiz-goal', 'fitness', wiz.goal, 'Тонус')}
+        </div>
+
+        <div class="wiz-step"><b>3.</b> Сколько тренировок в неделю?</div>
         <div class="chips">${[2, 3, 4, 5].map((n) =>
           `<button class="chip${wiz.count === n ? ' on' : ''}" data-act="wiz-count" data-n="${n}">${n}</button>`).join('')}</div>
-        <div class="wiz-step"><b>2.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
+
+        <div class="wiz-step"><b>4.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
         <div class="chips">${wd.map((label, i) =>
           `<button class="chip${wiz.days.includes(i) ? ' on' : ''}" data-act="wiz-wd" data-wd="${i}">${label}</button>`).join('')}</div>
-        <button class="btn" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать программу</button>
-        <div class="meso-hint">Дни получат метки A${wiz.count > 1 ? ', B' : ''}${wiz.count > 2 ? ', C…' : ''} — упражнения добавишь на следующем шаге.</div>
+
+        <div class="wiz-step"><b>5.</b> Время на тренировку</div>
+        <div class="chips">
+          ${opt('wiz-time', 45, wiz.time, '45 мин')}
+          ${opt('wiz-time', 60, wiz.time, '60 мин')}
+          ${opt('wiz-time', 90, wiz.time, '90 мин')}
+        </div>
+
+        <div class="wiz-step"><b>6.</b> Формат</div>
+        <div class="chips">
+          ${opt('wiz-split', 'auto', wiz.split, 'Авто')}
+          ${opt('wiz-split', 'full', wiz.split, 'Фулбади')}
+          ${opt('wiz-split', 'split', wiz.split, 'По группам')}
+        </div>
+
+        <div class="meso-actions">
+          <button class="btn" data-act="wiz-generate" ${picked === wiz.count ? '' : 'disabled'}>🪄 Подобрать упражнения</button>
+          <button class="btn ghost" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать пустую</button>
+        </div>
+        <div class="meso-hint">Подбор — по принципам доказательного тренинга (Schoenfeld, Israetel/RP, Helms):
+        10–20 сетов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
+        приоритет упражнениям с растянутой позицией. Всё можно править после создания.</div>
       </section>`;
   }
 
@@ -1932,6 +2118,10 @@ function initProgram(root, opts = {}) {
     const dayId = btn.dataset.day, idx = btn.dataset.idx != null ? +btn.dataset.idx : null;
 
     switch (act) {
+      case 'wiz-sex': wiz.sex = btn.dataset.v; render(); break;
+      case 'wiz-goal': wiz.goal = btn.dataset.v; render(); break;
+      case 'wiz-time': wiz.time = +btn.dataset.v; render(); break;
+      case 'wiz-split': wiz.split = btn.dataset.v; render(); break;
       case 'wiz-count': wiz.count = +btn.dataset.n; wiz.days = wiz.days.slice(0, wiz.count); render(); break;
       case 'wiz-wd': {
         const w = +btn.dataset.wd;
@@ -1946,6 +2136,28 @@ function initProgram(root, opts = {}) {
           const r = St.addDay(next, { weekday: w });
           next = r.state;
         }
+        persist(next); break;
+      }
+      case 'wiz-generate': {
+        if (wiz.days.length !== wiz.count) break;
+        const gen = generateProgram(
+          { sex: wiz.sex, goal: wiz.goal, daysPerWeek: wiz.count, minutes: wiz.time, split: wiz.split },
+          state.exercises
+        );
+        const wds = [...wiz.days].sort((a, b) => a - b);
+        let next = state;
+        gen.days.forEach((gd, i) => {
+          const r = St.addDay(next, { label: gd.label, weekday: wds[i] });
+          next = r.state;
+          for (const it of gd.items) next = St.addDayItem(next, r.day.id, it);
+        });
+        persist(next); break;
+      }
+      case 'wiz-reset': {
+        if (!confirmDel('Пересоздать программу? Текущие дни будут удалены (история тренировок сохранится).')) break;
+        let next = state;
+        for (const d of [...state.program.days]) next = St.deleteDay(next, d.id);
+        wiz.days = [];
         persist(next); break;
       }
       case 'set-wd': {

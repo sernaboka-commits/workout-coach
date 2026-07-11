@@ -60,7 +60,7 @@ function initProgram(root, opts = {}) {
   let state = opts.state || St.load(lib());
   let picker = null;   // { dayId } когда открыт выбор упражнения
   let query = '', muscle = null, customOpen = false;
-  let wiz = { count: 3, days: [] };   // мастер создания программы
+  let wiz = { count: 3, days: [], sex: 'm', goal: 'hypertrophy', time: 60, split: 'auto' };   // мастер создания программы
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -76,7 +76,10 @@ function initProgram(root, opts = {}) {
       <div class="prog-screen">
         <div class="prog-top">
           <div class="wk-title">Программа</div>
-          <button class="btn" data-act="add-day">+ день</button>
+          <div>
+            <button class="btn ghost sm" data-act="wiz-reset">🪄 Мастер</button>
+            <button class="btn sm" data-act="add-day">+ день</button>
+          </div>
         </div>
         ${daysHtml}
       </div>
@@ -86,17 +89,50 @@ function initProgram(root, opts = {}) {
   function wizardHtml() {
     const wd = (typeof WEEKDAYS !== 'undefined') ? WEEKDAYS : ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
     const picked = wiz.days.length;
+    const opt = (act, val, cur, label) =>
+      `<button class="chip${cur === val ? ' on' : ''}" data-act="${act}" data-v="${val}">${label}</button>`;
     return `
       <div class="wk-title" style="padding:6px 4px 12px">Новая программа</div>
       <section class="day-card">
-        <div class="wiz-step"><b>1.</b> Сколько тренировок в неделю?</div>
+        <div class="wiz-step"><b>1.</b> Пол</div>
+        <div class="chips">${opt('wiz-sex', 'm', wiz.sex, 'Мужчина')}${opt('wiz-sex', 'f', wiz.sex, 'Женщина')}</div>
+
+        <div class="wiz-step"><b>2.</b> Цель</div>
+        <div class="chips">
+          ${opt('wiz-goal', 'hypertrophy', wiz.goal, 'Рост мышц')}
+          ${opt('wiz-goal', 'strength', wiz.goal, 'Сила')}
+          ${opt('wiz-goal', 'fitness', wiz.goal, 'Тонус')}
+        </div>
+
+        <div class="wiz-step"><b>3.</b> Сколько тренировок в неделю?</div>
         <div class="chips">${[2, 3, 4, 5].map((n) =>
           `<button class="chip${wiz.count === n ? ' on' : ''}" data-act="wiz-count" data-n="${n}">${n}</button>`).join('')}</div>
-        <div class="wiz-step"><b>2.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
+
+        <div class="wiz-step"><b>4.</b> В какие дни? <small>(выбрано ${picked}/${wiz.count})</small></div>
         <div class="chips">${wd.map((label, i) =>
           `<button class="chip${wiz.days.includes(i) ? ' on' : ''}" data-act="wiz-wd" data-wd="${i}">${label}</button>`).join('')}</div>
-        <button class="btn" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать программу</button>
-        <div class="meso-hint">Дни получат метки A${wiz.count > 1 ? ', B' : ''}${wiz.count > 2 ? ', C…' : ''} — упражнения добавишь на следующем шаге.</div>
+
+        <div class="wiz-step"><b>5.</b> Время на тренировку</div>
+        <div class="chips">
+          ${opt('wiz-time', 45, wiz.time, '45 мин')}
+          ${opt('wiz-time', 60, wiz.time, '60 мин')}
+          ${opt('wiz-time', 90, wiz.time, '90 мин')}
+        </div>
+
+        <div class="wiz-step"><b>6.</b> Формат</div>
+        <div class="chips">
+          ${opt('wiz-split', 'auto', wiz.split, 'Авто')}
+          ${opt('wiz-split', 'full', wiz.split, 'Фулбади')}
+          ${opt('wiz-split', 'split', wiz.split, 'По группам')}
+        </div>
+
+        <div class="meso-actions">
+          <button class="btn" data-act="wiz-generate" ${picked === wiz.count ? '' : 'disabled'}>🪄 Подобрать упражнения</button>
+          <button class="btn ghost" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать пустую</button>
+        </div>
+        <div class="meso-hint">Подбор — по принципам доказательного тренинга (Schoenfeld, Israetel/RP, Helms):
+        10–20 сетов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
+        приоритет упражнениям с растянутой позицией. Всё можно править после создания.</div>
       </section>`;
   }
 
@@ -196,6 +232,10 @@ function initProgram(root, opts = {}) {
     const dayId = btn.dataset.day, idx = btn.dataset.idx != null ? +btn.dataset.idx : null;
 
     switch (act) {
+      case 'wiz-sex': wiz.sex = btn.dataset.v; render(); break;
+      case 'wiz-goal': wiz.goal = btn.dataset.v; render(); break;
+      case 'wiz-time': wiz.time = +btn.dataset.v; render(); break;
+      case 'wiz-split': wiz.split = btn.dataset.v; render(); break;
       case 'wiz-count': wiz.count = +btn.dataset.n; wiz.days = wiz.days.slice(0, wiz.count); render(); break;
       case 'wiz-wd': {
         const w = +btn.dataset.wd;
@@ -210,6 +250,28 @@ function initProgram(root, opts = {}) {
           const r = St.addDay(next, { weekday: w });
           next = r.state;
         }
+        persist(next); break;
+      }
+      case 'wiz-generate': {
+        if (wiz.days.length !== wiz.count) break;
+        const gen = generateProgram(
+          { sex: wiz.sex, goal: wiz.goal, daysPerWeek: wiz.count, minutes: wiz.time, split: wiz.split },
+          state.exercises
+        );
+        const wds = [...wiz.days].sort((a, b) => a - b);
+        let next = state;
+        gen.days.forEach((gd, i) => {
+          const r = St.addDay(next, { label: gd.label, weekday: wds[i] });
+          next = r.state;
+          for (const it of gd.items) next = St.addDayItem(next, r.day.id, it);
+        });
+        persist(next); break;
+      }
+      case 'wiz-reset': {
+        if (!confirmDel('Пересоздать программу? Текущие дни будут удалены (история тренировок сохранится).')) break;
+        let next = state;
+        for (const d of [...state.program.days]) next = St.deleteDay(next, d.id);
+        wiz.days = [];
         persist(next); break;
       }
       case 'set-wd': {

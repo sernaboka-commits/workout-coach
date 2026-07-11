@@ -19,7 +19,7 @@ const EXERCISE_LIBRARY = [
   { id: 'incline-bb-press',    name: 'Жим штанги на наклонной',        primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2.5 },
   { id: 'incline-db-press',    name: 'Жим гантелей на наклонной',      primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 2 },
   { id: 'machine-chest-press', name: 'Жим в тренажёре на грудь',       primaryMuscle: 'chest', secondaryMuscles: ['shoulders', 'arms'], kind: 'compound',  weightStep: 5 },
-  { id: 'dips',                name: 'Отжимания на брусьях',           primaryMuscle: 'chest', secondaryMuscles: ['arms', 'shoulders'], kind: 'compound',  weightStep: 2.5 },
+  { id: 'dips',                name: 'Отжимания на брусьях',           primaryMuscle: 'chest', secondaryMuscles: ['arms', 'shoulders'], kind: 'compound',  weightStep: 2.5, bodyweight: true },
   { id: 'cable-fly',           name: 'Сведение в кроссовере',          primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
   { id: 'db-fly',              name: 'Разводка гантелей лёжа',         primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 2 },
   { id: 'pec-deck',            name: 'Бабочка (пек-дек)',              primaryMuscle: 'chest', secondaryMuscles: [],                     kind: 'isolation', weightStep: 5 },
@@ -27,7 +27,7 @@ const EXERCISE_LIBRARY = [
   // ---- Спина ----
   { id: 'db-shrug',            name: 'Шраги с гантелями',              primaryMuscle: 'back',  secondaryMuscles: ['shoulders'],         kind: 'isolation', weightStep: 2 },
   { id: 'deadlift',            name: 'Становая тяга',                  primaryMuscle: 'back',  secondaryMuscles: ['legs', 'core'],      kind: 'compound',  weightStep: 2.5 },
-  { id: 'pull-up',             name: 'Подтягивания',                   primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2.5 },
+  { id: 'pull-up',             name: 'Подтягивания',                   primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2.5, bodyweight: true },
   { id: 'lat-pulldown',        name: 'Тяга верхнего блока',            primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 5 },
   { id: 'bb-row',              name: 'Тяга штанги в наклоне',          primaryMuscle: 'back',  secondaryMuscles: ['arms', 'core'],      kind: 'compound',  weightStep: 2.5 },
   { id: 'db-row',              name: 'Тяга гантели в наклоне',         primaryMuscle: 'back',  secondaryMuscles: ['arms'],              kind: 'compound',  weightStep: 2 },
@@ -86,8 +86,8 @@ const EXERCISE_LIBRARY = [
   // ---- Кор ----
   { id: 'plank',               name: 'Планка (с отягощением)',         primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
   { id: 'cable-crunch',        name: 'Скручивания на блоке',           primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 2.5 },
-  { id: 'hanging-leg-raise',   name: 'Подъём ног в висе',              primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
-  { id: 'ab-wheel',            name: 'Ролик для пресса',               primaryMuscle: 'core',  secondaryMuscles: ['shoulders'],         kind: 'compound',  weightStep: 1 },
+  { id: 'hanging-leg-raise',   name: 'Подъём ног в висе',              primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1, bodyweight: true },
+  { id: 'ab-wheel',            name: 'Ролик для пресса',               primaryMuscle: 'core',  secondaryMuscles: ['shoulders'],         kind: 'compound',  weightStep: 1, bodyweight: true },
   { id: 'russian-twist',       name: 'Русские скручивания',            primaryMuscle: 'core',  secondaryMuscles: [],                     kind: 'isolation', weightStep: 1 },
   { id: 'farmer-walk',         name: 'Прогулка фермера',               primaryMuscle: 'core',  secondaryMuscles: ['back', 'arms'],      kind: 'compound',  weightStep: 2 },
 ];

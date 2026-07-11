@@ -95,6 +95,21 @@ function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   const failCount = work.filter((s) => s.rir != null && Number(s.rir) <= 0).length;
   const nSets = work.length;
 
+  // собственный вес: рычаги только повторы/RIR/усложнение (веса нет)
+  if (opts.bodyweight) {
+    const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
+    let bl, bt;
+    if (failCount >= 2) { bl = 'hold'; bt = `было ${failCount} подхода до отказа — удержи повторы, не гонись`; }
+    else if (topReps >= item.repRangeMax && minRIR >= targetRIR) { bl = 'harder'; bt = `перерос ${item.repRangeMax} повт (RIR ${minRIR}) — усложни (пауза/медленный негатив) или добавь отягощение поясом`; }
+    else if (minRIR >= targetRIR) { bl = 'reps'; bt = `добавь повтор (цель ${goal} при RIR ${targetRIR})`; }
+    else { bl = 'hold'; bt = `тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори столько же, целься в RIR ${targetRIR}`; }
+    let bvol = null;
+    if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (bl === 'reps' || bl === 'hold')) {
+      bvol = `или прибавь 1 подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+    }
+    return { lever: bl, text: bt, volume: bvol };
+  }
+
   let lever, text;
   if (failCount >= 2) {
     lever = 'reduce';
@@ -215,11 +230,34 @@ function recommend(exerciseId, setNo, ctx) {
   const { meso, item, exercise } = ctx;
   const step = exercise.weightStep || 2.5;
   const targetRIR = meso.targetRIR;
+  const bw = !!exercise.bodyweight;
 
   // сессии с рабочими (не калибровочными) сетами, без делоуда, новые первыми
   const history = (ctx.history || []).filter(
     (h) => !h.isDeload && h.sets.some((s) => !s.isCalibration)
   );
+
+  // упражнение с собственным весом: прогрессия только повторами/RIR, вес не трогаем
+  if (bw) {
+    const mid = Math.round((item.repRangeMin + item.repRangeMax) / 2);
+    const hs = history.filter((h) => h.sets.some((s) => !s.isCalibration));
+    if (!hs.length) {
+      return { weight: 0, reps: mid, targetRIR, isDeload: meso.isDeload, needsCalibration: false, lastResult: null, bodyweight: true,
+        reason: `Первый раз — сделай ~${mid} повт, оцени RIR. Дальше пойдут рекомендации по повторам.` };
+    }
+    const lw = hs[0].sets.filter((s) => !s.isCalibration);
+    const ref = lw.reduce((a, s) => (a && a.reps >= s.reps ? a : s), null);
+    const rtf = Number(ref.reps) + (ref.rir == null ? targetRIR : Number(ref.rir));
+    const minR = Math.min(...lw.map((s) => (s.rir == null ? targetRIR : Number(s.rir))));
+    const lastResult = summarize(lw);
+    if (ref.reps >= item.repRangeMax && minR >= targetRIR) {
+      return { weight: 0, reps: item.repRangeMax, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
+        reason: `Перерос ${item.repRangeMax} повт при RIR ${ref.rir} — усложни (пауза/медленный негатив) или добавь отягощение поясом.` };
+    }
+    const reps = projectReps(ref, targetRIR, item);
+    return { weight: 0, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
+      reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.` };
+  }
 
   // нет истории → режим калибровки
   if (history.length === 0) {

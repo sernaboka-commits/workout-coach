@@ -142,6 +142,29 @@ t('сессия только с калибровочным сетом → needsC
   assert(r.needsCalibration === true, JSON.stringify(r));
 });
 
+console.log('— собственный вес: прогрессия только повторами/RIR —');
+const bwEx = { bodyweight: true, weightStep: 2.5 };
+t('bodyweight без истории → повторы, вес 0, без калибровки', () => {
+  const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history: [] });
+  assert(r.weight === 0 && r.needsCalibration === false && r.bodyweight === true && r.reps >= 6, JSON.stringify(r));
+});
+t('bodyweight в диапазоне → повторы под целевой RIR, вес 0', () => {
+  const history = [sess([S(0, 8, 2)])];
+  const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history });
+  assert(r.weight === 0 && r.reps === 8, JSON.stringify(r));   // 8+2=10 до отказа, −2 = 8
+});
+t('bodyweight потолок с запасом → усложни/отягощение, НЕ +вес', () => {
+  const history = [sess([S(0, 12, 2), S(0, 12, 2), S(0, 12, 2)])];
+  const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history });
+  assert(r.weight === 0 && /усложни|отягощ/i.test(r.reason), JSON.stringify(r));
+});
+t('nextSessionAdvice bodyweight: рычаги без «кг» (harder/reps)', () => {
+  const a = eng.nextSessionAdvice([S(0, 12, 2), S(0, 12, 2), S(0, 12, 2)], item({ repRangeMin: 6, repRangeMax: 12 }), 2, { bodyweight: true });
+  assert(a.lever === 'harder' && !/кг/.test(a.text), JSON.stringify(a));
+  const b = eng.nextSessionAdvice([S(0, 8, 2)], item({ repRangeMin: 6, repRangeMax: 12 }), 2, { bodyweight: true });
+  assert(b.lever === 'reps' && !/кг/.test(b.text), JSON.stringify(b));
+});
+
 console.log('— nextSessionAdvice: рычаг прогрессии на след. тренировку —');
 const adv = (sets, it, t, o) => eng.nextSessionAdvice(sets, it, t, o);
 t('2+ подхода до отказа → reduce (управление усталостью)', () => {

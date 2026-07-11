@@ -59,7 +59,7 @@ function entryField(exId, field, label, value, p, step, mode, min, max) {
 
 /** Краткий текст результатов сессии: "60×10 RIR2, 60×9 RIR2". */
 function setsText(sets) {
-  return sets.map((s) => `${s.weight}×${s.reps}${s.rir != null ? ' RIR' + s.rir : ''}`).join(', ');
+  return sets.map((s) => `${s.weight > 0 ? s.weight + '×' : ''}${s.reps}${s.rir != null ? ' RIR' + s.rir : ''}`).join(', ');
 }
 
 /** Секунды → "m:ss". */
@@ -126,6 +126,12 @@ function planExercise(item, exSets, ctx, engine) {
 
   if (work.length >= item.workSets) return { mode: 'done', done: work.length };
 
+  // собственный вес: без калибровки, прогрессия повторами/RIR
+  if (ctx.exercise && ctx.exercise.bodyweight) {
+    if (work.length > 0) return { mode: 'work', rec: nextSetRec(work[work.length - 1], ctx, item, engine) };
+    return { mode: 'work', rec: engine.recommend(item.exerciseId, work.length + 1, ctx) };
+  }
+
   // калибровочный сценарий: истории нет
   if (!hasHistory && !ctx.meso.isDeload) {
     if (!probe) {
@@ -172,12 +178,14 @@ function nextSetRec(prev, ctx, item, engine) {
   const reps = engine.projectReps(prev, t, item);
   const rir = prev.rir == null ? t : prev.rir;
   const rtf = Number(prev.reps) + rir;
+  const did = prev.weight > 0 ? `${prev.reps}×${prev.weight}` : `${prev.reps} повт`;
   return {
     weight: prev.weight,
     reps,
     targetRIR: t,
     needsCalibration: false,
-    reason: `Прошлый подход ${prev.reps}×${prev.weight}${prev.rir != null ? ' RIR ' + prev.rir : ''} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.`,
+    bodyweight: !(prev.weight > 0) && !!(ctx.exercise && ctx.exercise.bodyweight),
+    reason: `Прошлый подход ${did}${prev.rir != null ? ' RIR ' + prev.rir : ''} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.`,
   };
 }
 
@@ -295,7 +303,7 @@ function initWorkout(root, opts = {}) {
       const rows = logged.map((s, i) => `
         <div class="set-row done">
           <span class="set-no">${s.isCalibration ? 'кал.' : '#' + (i + 1)}</span>
-          <span class="set-res">${s.weight} кг × ${s.reps}${s.rir != null ? ' · RIR ' + s.rir : ''}</span>
+          <span class="set-res">${s.weight > 0 ? s.weight + ' кг × ' + s.reps : s.reps + ' повт'}${s.rir != null ? ' · RIR ' + s.rir : ''}</span>
           <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
         </div>`).join('');
 
@@ -309,13 +317,19 @@ function initWorkout(root, opts = {}) {
       let active = '';
       if (plan.mode !== 'done') {
         const d = ensureDraft(item, plan);
-        const recVals = plan.rec && plan.rec.weight != null
-          ? `<b>Рекомендация: ${plan.rec.weight} кг × ${plan.rec.reps} · RIR ${plan.rec.targetRIR}</b><br>`
+        const bw = !!ex.bodyweight;
+        const recVals = plan.rec && plan.rec.reps != null
+          ? (bw
+            ? `<b>Рекомендация: ${plan.rec.reps} повт · RIR ${plan.rec.targetRIR}</b><br>`
+            : (plan.rec.weight != null ? `<b>Рекомендация: ${plan.rec.weight} кг × ${plan.rec.reps} · RIR ${plan.rec.targetRIR}</b><br>` : ''))
           : '';
+        const weightField = bw
+          ? `<div class="bw-note">Собственный вес — прогрессия по повторам и RIR</div>`
+          : entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null);
         active = `
           <div class="rec-line">${recVals}${plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
-            ${entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null)}
+            ${weightField}
             ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
             ${entryField(item.exerciseId, 'rir', 'RIR (в запасе)', d.rir, 'i', 1, 'numeric', 0, 5)}
             <button class="log-wide" data-act="log" data-ex="${item.exerciseId}">✓ Записать подход</button>
@@ -356,12 +370,13 @@ function initWorkout(root, opts = {}) {
       const item = day.items.find((i) => i.exerciseId === e.exerciseId);
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
-      const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek }) : null;
+      const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
       const advHtml = adv
         ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
-        : (e.calib ? '<div class="sum-advice lv-hold">След. раз: рабочие подходы → пойдут рекомендации по весу</div>' : '');
+        : (e.calib ? '<div class="sum-advice lv-hold">След. раз: рабочие подходы → пойдут рекомендации</div>' : '');
+      const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
-        <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? ` · лучший ${e.top.weight}×${e.top.reps}` : ''}</small></div>
+        <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${top}</small></div>
         ${advHtml}
       </div>`;
     }).join('');

@@ -63,13 +63,20 @@ function migrate(state) {
 
 /* ---------- load / save ---------- */
 
-/** Домердж встроенной библиотеки: новые упражнения из кода появляются
- *  и в старых сохранённых состояниях (пользовательские не трогаем). */
+/** Синхронизация встроенной библиотеки со старым состоянием:
+ *  - у встроенных упражнений обновляем определение из кода (название,
+ *    флаги вроде bodyweight, шаг веса) — так правки библиотеки доезжают;
+ *  - пользовательские (isCustom) не трогаем;
+ *  - недостающие встроенные добавляем. */
 function mergeLibrary(state, exerciseLibrary) {
-  const have = new Set(state.exercises.map((e) => e.id));
-  const missing = (exerciseLibrary || []).filter((e) => !have.has(e.id));
-  if (!missing.length) return state;
-  return { ...state, exercises: [...state.exercises, ...missing.map((e) => ({ ...e, isCustom: false }))] };
+  const byId = {};
+  for (const e of exerciseLibrary || []) byId[e.id] = e;
+  const refreshed = state.exercises.map((e) =>
+    e.isCustom || !byId[e.id] ? e : { ...byId[e.id], isCustom: false }
+  );
+  const have = new Set(refreshed.map((e) => e.id));
+  for (const e of exerciseLibrary || []) if (!have.has(e.id)) refreshed.push({ ...e, isCustom: false });
+  return { ...state, exercises: refreshed };
 }
 
 function load(exerciseLibrary) {

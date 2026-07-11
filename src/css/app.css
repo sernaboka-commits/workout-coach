@@ -188,6 +188,10 @@ html, body {
 }
 .ef-ctrl .step:active { background: var(--line); }
 .ef-ctrl .val-in { flex: 1; min-width: 0; font-size: 20px; }
+.bw-note {
+  color: var(--muted); font-size: 12.5px; padding: 9px 11px; margin-top: 8px;
+  background: var(--surface-2); border-radius: 10px; border-left: 3px solid var(--cal);
+}
 .log-wide {
   width: 100%; height: 54px; margin-top: 12px; border: 0; border-radius: 12px;
   background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer;
@@ -217,6 +221,7 @@ html, body {
 .sum-advice.lv-sets   { border-left-color: var(--cal); }
 .sum-advice.lv-reduce { border-left-color: var(--danger); }
 .sum-advice.lv-hold   { border-left-color: var(--warn); }
+.sum-advice.lv-harder { border-left-color: var(--cal); }
 /* беговые рычаги */
 .sum-advice.lv-distance { border-left-color: var(--ok); }
 .sum-advice.lv-duration { border-left-color: var(--ok); }

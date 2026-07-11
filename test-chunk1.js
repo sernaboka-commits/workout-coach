@@ -34,6 +34,24 @@ t('поиск: "жим" + фильтр chest', () => {
   assert(r.length >= 4 && r.every(e => e.primaryMuscle === 'chest'));
 });
 
+t('упражнения с собственным весом помечены bodyweight', () => {
+  const p = ex.EXERCISE_LIBRARY.find((e) => e.id === 'pull-up');
+  const d = ex.EXERCISE_LIBRARY.find((e) => e.id === 'dips');
+  assert(p.bodyweight === true && d.bodyweight === true, 'нет флага bodyweight');
+});
+t('mergeLibrary обновляет встроенные — флаг bodyweight доезжает в старое состояние', () => {
+  const old = store.defaultState(ex.EXERCISE_LIBRARY);
+  old.exercises = old.exercises.map((e) => (e.id === 'pull-up' ? { ...e, bodyweight: undefined } : e));
+  const merged = store.mergeLibrary(old, ex.EXERCISE_LIBRARY);
+  assert(merged.exercises.find((e) => e.id === 'pull-up').bodyweight === true);
+});
+t('mergeLibrary не трогает пользовательские упражнения', () => {
+  const s = store.defaultState(ex.EXERCISE_LIBRARY);
+  s.exercises.push({ id: 'cx_z', name: 'Своё', primaryMuscle: 'chest', kind: 'isolation', weightStep: 2.5, isCustom: true });
+  const merged = store.mergeLibrary(s, ex.EXERCISE_LIBRARY);
+  assert(merged.exercises.find((e) => e.id === 'cx_z').isCustom === true);
+});
+
 console.log('— store: жизненный цикл —');
 let state = store.load(ex.EXERCISE_LIBRARY);
 t('load без данных -> дефолтное состояние', () => assert(state.sessions.length === 0 && state.exercises.length === 60));

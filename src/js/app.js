@@ -92,6 +92,7 @@ function initApp() {
           <div class="an-head"><b>Бэкап данных</b></div>
           ${overdue ? '<div class="cx-err" style="color:var(--warn)">Пора сделать бэкап — данные хранятся только в этом браузере.</div>' : ''}
           <div class="meso-hint">Последний бэкап: ${last}. Сессий: ${state.sessions.length}.</div>
+          <div class="meso-hint" id="storage-status"></div>
           <div class="meso-actions">
             <button class="btn" data-act="export">Скачать JSON</button>
             <label class="btn ghost" style="cursor:pointer">Импорт JSON
@@ -123,6 +124,16 @@ function initApp() {
 
     const fileInput = root.querySelector('#import-file');
     if (fileInput) fileInput.addEventListener('change', (e) => doImport(e, root));
+
+    // статус постоянного хранилища (заполняется асинхронно)
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persisted) {
+      navigator.storage.persisted().then((p) => {
+        const el = root.querySelector('#storage-status');
+        if (el) el.textContent = p
+          ? '✓ Хранилище постоянное: браузер не удалит данные при автоочистке.'
+          : 'Браузер может стереть данные при долгом неиспользовании или нехватке места — скачивай бэкап и храни в облаке.';
+      }).catch(() => {});
+    }
   }
 
   function doExport(root) {
@@ -150,6 +161,14 @@ function initApp() {
       }
     };
     reader.readAsText(file);
+  }
+
+  // просим браузер сделать хранилище постоянным: без этого iOS/Android
+  // могут стереть localStorage неактивного сайта при автоочистке
+  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+    navigator.storage.persisted()
+      .then((p) => p || navigator.storage.persist())
+      .catch(() => {});
   }
 
   // офлайн: регистрируем service worker (только в защищённом контексте — Pages/localhost)

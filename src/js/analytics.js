@@ -9,8 +9,9 @@
  * engine.js; RIR всегда приводится к повторам до отказа (reps + rir).
  * ============================================================ */
 
-/* engine в node — через require; в браузере epley1rm — глобаль */
+/* engine/exercises в node — через require; в браузере — глобали */
 var _ANALYTICS_ENGINE = (typeof module !== 'undefined') ? require('./engine.js') : null;
+var _ANALYTICS_EX = (typeof module !== 'undefined') ? require('./exercises.js') : null;
 
 /** Единая точка расчёта e1RM: вес × повторы-до-отказа по Эпли. */
 function e1rm(weight, reps, rir) {
@@ -107,6 +108,62 @@ function weeklyVolume(state, { now = new Date(), weekOffset = 0, corridor = VOLU
     status: counts[m] < lo ? 'low' : counts[m] > hi ? 'high' : 'ok',
   }));
   return { weekStart: start.toISOString().slice(0, 10), byMuscle };
+}
+
+/* ---------- нагрузка по детальным мышцам ---------- */
+
+/**
+ * Недельная нагрузка по детальным мышцам (бицепс/трицепс, верх/середина/
+ * низ груди и т.д.) с учётом вторичных мышц: каждый рабочий сет вносит
+ * долю из карты muscles упражнения (дробные сеты RP: целевая 1.0,
+ * синергист 0.5, второстепенная 0.25). Тоннаж — вес×повторы×доля;
+ * для упражнений с собственным весом это только доп. отягощение (ориентир).
+ * Калибровочные сеты исключаются.
+ * → { weekStart, groups: [{ group, sets, tonnage,
+ *                           muscles: [{ muscle, sets, tonnage }] }] }
+ * Группы и мышцы — только с ненулевой нагрузкой, в каноническом порядке.
+ */
+function muscleLoad(state, { now = new Date(), weekOffset = 0 } = {}) {
+  const DM = _ANALYTICS_EX ? _ANALYTICS_EX.DETAIL_MUSCLES : DETAIL_MUSCLES;
+  const fractionsOf = _ANALYTICS_EX ? _ANALYTICS_EX.muscleFractions : muscleFractions;
+
+  const start = startOfWeek(now);
+  start.setUTCDate(start.getUTCDate() - weekOffset * 7);
+  const startMs = start.getTime();
+  const endMs = startMs + 7 * 86400000;
+
+  const exById = {};
+  for (const ex of state.exercises) exById[ex.id] = ex;
+
+  const sets = {}, tonnage = {};
+  for (const ses of state.sessions) {
+    const ms = new Date(ses.date).getTime();
+    if (ms < startMs || ms >= endMs) continue;
+    for (const s of ses.sets) {
+      if (s.isCalibration) continue;
+      const fr = fractionsOf(exById[s.exerciseId]);
+      const ton = Number(s.weight) * Number(s.reps);
+      for (const [m, f] of Object.entries(fr)) {
+        if (!DM[m]) continue;
+        sets[m] = (sets[m] || 0) + f;
+        tonnage[m] = (tonnage[m] || 0) + ton * f;
+      }
+    }
+  }
+
+  const groups = [];
+  for (const g of MUSCLE_ORDER) {
+    const ids = Object.keys(DM).filter((m) => DM[m].group === g && sets[m] > 0);
+    if (!ids.length) continue;
+    groups.push({
+      group: g,
+      // итоги группы — из неокруглённых сумм (фолбэк даёт дробные доли)
+      sets: +ids.reduce((a, m) => a + sets[m], 0).toFixed(1),
+      tonnage: Math.round(ids.reduce((a, m) => a + tonnage[m], 0)),
+      muscles: ids.map((m) => ({ muscle: m, sets: +sets[m].toFixed(1), tonnage: Math.round(tonnage[m]) })),
+    });
+  }
+  return { weekStart: start.toISOString().slice(0, 10), groups };
 }
 
 /* ---------- детектор стагнации ---------- */
@@ -425,7 +482,7 @@ function monthGrid(state, { year, month }) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    e1rm, bestE1rm, e1rmSeries, weeklyVolume, stagnation,
+    e1rm, bestE1rm, e1rmSeries, weeklyVolume, muscleLoad, stagnation,
     startOfWeek, weekKey, MUSCLE_ORDER, VOLUME_CORRIDOR,
     RUN_TYPES, paceSecKm, fmtPace, runWeeklySeries, easyPaceSeries, hardSharePct, rampWarning,
     HR_ZONES, RUN_ZONE_TARGET, hrMaxTanaka, hrZones, hrZoneFor, zoneAdvice,

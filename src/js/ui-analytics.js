@@ -59,11 +59,12 @@ const APAL = {
 function initAnalytics(root, opts = {}) {
   const St = opts.store || { load, save, updateSet, deleteSet, getExercise };
   const An = opts.analytics || {
-    e1rmSeries, weeklyVolume, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR,
+    e1rmSeries, weeklyVolume, muscleLoad, stagnation, MUSCLE_ORDER, VOLUME_CORRIDOR,
     monthGrid, WEEKDAY_SHORT, RUN_TYPES, fmtPace, paceSecKm,
   };
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
+  const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib);
@@ -73,6 +74,7 @@ function initAnalytics(root, opts = {}) {
   const _now = new Date();
   let calYear = _now.getFullYear(), calMonth = _now.getMonth();   // видимый месяц календаря
   let calSel = null;                // выбранная дата (детали дня)
+  let mlOffset = 0;                 // недель назад для «Нагрузки по мышцам»
 
   function persist(next) { state = next; St.save(state); onCommit(state); render(); }
 
@@ -142,6 +144,39 @@ function initAnalytics(root, opts = {}) {
     return `<div class="cal-detail"><b>${calSel}</b>${parts.join('')}</div>`;
   }
 
+  function fmtTon(t) {
+    return t >= 10000 ? Math.round(t / 100) / 10 + ' т' : Math.round(t) + ' кг';
+  }
+
+  function muscleLoadHtml() {
+    const ml = An.muscleLoad(state, { weekOffset: mlOffset });
+    const weekLabel = mlOffset === 0 ? 'эта неделя' : `нед. с ${ml.weekStart}`;
+    const maxSets = Math.max(1, ...ml.groups.flatMap((g) => g.muscles.map((m) => m.sets)));
+    const body = ml.groups.length
+      ? ml.groups.map((g) => `
+          <div class="ml-group"><b>${muscleLabels[g.group] || g.group}</b><small>${g.sets} сет · ${fmtTon(g.tonnage)}</small></div>
+          ${g.muscles.map((m) => `
+            <div class="ml-row">
+              <span class="ml-name">${(detailMuscles[m.muscle] || { label: m.muscle }).label}</span>
+              <span class="ml-bar"><i style="width:${Math.round((m.sets / maxSets) * 100)}%"></i></span>
+              <span class="ml-val">${m.sets} · ${fmtTon(m.tonnage)}</span>
+            </div>`).join('')}`).join('')
+      : '<div class="pi-empty">На этой неделе рабочих сетов нет.</div>';
+    return `
+      <section class="an-card">
+        <div class="an-head">
+          <b>Нагрузка по мышцам</b>
+          <div class="cal-nav">
+            <button class="mini" data-act="ml-prev">‹</button>
+            <span class="cal-title">${weekLabel}</span>
+            <button class="mini" data-act="ml-next"${mlOffset === 0 ? ' disabled' : ''}>›</button>
+          </div>
+        </div>
+        ${body}
+        <div class="ml-note">Эффективные сеты с учётом вторичных мышц: целевая 1.0 · синергист 0.5 · второстепенная 0.25. Тоннаж = вес × повторы × доля (свой вес тела не учитывается).</div>
+      </section>`;
+  }
+
   function render() {
     const exs = loggedExercises();
     if (!selEx || !exs.some((e) => e.id === selEx)) selEx = exs.length ? exs[0].id : null;
@@ -167,6 +202,8 @@ function initAnalytics(root, opts = {}) {
           <div class="an-head"><b>Объём за неделю</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
           <canvas id="an-vol" class="chart"></canvas>
         </section>
+
+        ${muscleLoadHtml()}
 
         <section class="an-card">
           <div class="an-head"><b>Стагнация</b></div>
@@ -319,7 +356,9 @@ function initAnalytics(root, opts = {}) {
     const act = btn.dataset.act, setId = btn.dataset.set;
     const st = setId ? findSet(setId) : null;
 
-    if (act === 'cal-prev') { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } render(); }
+    if (act === 'ml-prev') { mlOffset++; render(); }
+    else if (act === 'ml-next') { if (mlOffset > 0) mlOffset--; render(); }
+    else if (act === 'cal-prev') { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } render(); }
     else if (act === 'cal-next') { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } render(); }
     else if (act === 'cal-day') { calSel = calSel === btn.dataset.date ? null : btn.dataset.date; render(); }
     else if (act === 'edit-set' && st) { editing = setId; draft = { weight: st.weight, reps: st.reps, rir: st.rir == null ? 0 : st.rir }; render(); }

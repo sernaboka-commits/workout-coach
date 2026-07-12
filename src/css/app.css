@@ -338,6 +338,8 @@ html, body {
 .custom-form { border-top: 1px solid var(--line); padding-top: 12px; }
 .custom-form .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .cx-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }
+.cx-details { margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--line); }
+.cx-details.off { display: none; }
 
 /* ============================================================
  * Экран аналитики
@@ -381,6 +383,16 @@ html, body {
 .cal-legend i { vertical-align: middle; }
 .cal-detail { margin-top: 10px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 .cal-detail-row { color: var(--muted); margin-top: 4px; }
+
+/* --- нагрузка по детальным мышцам --- */
+.ml-group { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 10px 0 4px; }
+.ml-group small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ml-row { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 10px; font-size: 12.5px; }
+.ml-name { flex: 0 0 116px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-bar { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ml-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.ml-val { flex: 0 0 auto; min-width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+.ml-note { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.4; }
 
 .stag { background: var(--surface-2); border-left: 3px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .stag-name { font-weight: 700; }

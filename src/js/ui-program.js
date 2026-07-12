@@ -65,6 +65,7 @@ function initProgram(root, opts = {}) {
   };
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
+  const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib());
@@ -221,11 +222,22 @@ function initProgram(root, opts = {}) {
       .map((m) => `<button class="chip${muscle === m ? ' on' : ''}" data-act="filter" data-m="${m}">${muscleLabels[m] || m}</button>`).join('');
     const list = libListHtml(results);
 
+    // выбор конкретной мышцы (для точного учёта нагрузки): по строке чипов
+    // на группу, видна только строка активной группы
+    const detailRows = ['chest','back','legs','shoulders','arms','core'].map((g) => {
+      const ids = Object.keys(detailMuscles).filter((m) => detailMuscles[m].group === g);
+      if (!ids.length) return '';
+      return `<div class="chips cx-details${g === 'chest' ? '' : ' off'}" data-group="${g}">
+        ${ids.map((m, i) => `<button class="chip${g === 'chest' && i === 0 ? ' on' : ''}" data-act="cx-md" data-md="${m}">${detailMuscles[m].label}</button>`).join('')}
+      </div>`;
+    }).join('');
+
     const custom = customOpen ? `
       <div class="custom-form">
         <input class="in" id="cx-name" placeholder="Название своего упражнения">
         <div class="cx-err" id="cx-err"></div>
         <div class="chips">${['chest','back','legs','shoulders','arms','core'].map((m)=>`<button class="chip${m==='chest'?' on':''}" data-act="cx-m" data-m="${m}">${muscleLabels[m]||m}</button>`).join('')}</div>
+        ${detailRows}
         <div class="row">
           <button class="chip" data-act="cx-kind" data-kind="compound">база</button>
           <button class="chip on" data-act="cx-kind" data-kind="isolation">изоляция</button>
@@ -325,7 +337,26 @@ function initProgram(root, opts = {}) {
       case 'pick': pickExercise(btn.dataset.id); break;
       case 'cx-open': customOpen = true; render(); break;
       // выбор мышцы/типа — только классы, без render (иначе стирается ввод названия)
-      case 'cx-m': root.querySelectorAll('.custom-form [data-act="cx-m"]').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); break;
+      case 'cx-m': {
+        root.querySelectorAll('.custom-form [data-act="cx-m"]').forEach((x) => x.classList.remove('on'));
+        btn.classList.add('on');
+        // показываем детальные мышцы выбранной группы
+        root.querySelectorAll('.custom-form .cx-details').forEach((row) => {
+          const on = row.dataset.group === btn.dataset.m;
+          row.classList.toggle('off', !on);
+          if (on && !row.querySelector('.chip.on')) {
+            const first = row.querySelector('.chip');
+            if (first) first.classList.add('on');
+          }
+        });
+        break;
+      }
+      case 'cx-md': {
+        const row = btn.closest('.cx-details');
+        row.querySelectorAll('.chip').forEach((x) => x.classList.remove('on'));
+        btn.classList.add('on');
+        break;
+      }
       case 'cx-kind': root.querySelectorAll('[data-act="cx-kind"]').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); break;
       case 'cx-create': createCustom(); break;
     }
@@ -393,8 +424,12 @@ function initProgram(root, opts = {}) {
     const kind = kindBtn ? kindBtn.dataset.kind : 'isolation';
     const mBtn = root.querySelector('.custom-form [data-act="cx-m"].on');
     const primaryMuscle = mBtn ? mBtn.dataset.m : 'chest';
+    const mdBtn = root.querySelector('.custom-form .cx-details:not(.off) [data-act="cx-md"].on');
     try {
-      const r = St.addCustomExercise(state, { name, primaryMuscle, kind, weightStep: step });
+      const r = St.addCustomExercise(state, {
+        name, primaryMuscle, kind, weightStep: step,
+        muscles: mdBtn ? { [mdBtn.dataset.md]: 1 } : null,
+      });
       let next = r.state;
       if (picker) next = St.addDayItem(next, picker.dayId, defaultItemFor(r.exercise));
       picker = null; customOpen = false;

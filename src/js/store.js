@@ -372,6 +372,16 @@ function addCustomExercise(state, ex) {
     weightStep: Number(ex.weightStep) || state.settings.weightStepDefault,
     isCustom: true,
   };
+  // карта долей по детальным мышцам (см. exercises.js); без неё
+  // аналитика возьмёт фолбэк из primaryMuscle/secondaryMuscles
+  if (ex.muscles && typeof ex.muscles === 'object') {
+    const muscles = {};
+    for (const [m, f] of Object.entries(ex.muscles)) {
+      const v = Number(f);
+      if (v > 0 && v <= 1) muscles[m] = v;
+    }
+    if (Object.keys(muscles).length) exercise.muscles = muscles;
+  }
   return { state: { ...state, exercises: [...state.exercises, exercise] }, exercise };
 }
 

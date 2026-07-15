@@ -215,7 +215,7 @@ function calibrate(probeSet, ctx) {
     confidence: +confidence.toFixed(2),
     targetReps,
     targetRIR,
-    reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}. Подтверди контрольным подходом.`,
+    reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}.`,
   };
 }
 

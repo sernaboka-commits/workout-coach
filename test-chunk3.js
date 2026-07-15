@@ -65,16 +65,29 @@ t('нет сетов → mode probe', () => {
   const p = ui.planExercise(item(), [], ctx(1), eng);
   assert(p.mode === 'probe' && p.rec.weight === null, JSON.stringify(p));
 });
-t('после разведочного → mode control с проекцией веса', () => {
+t('после лёгкой прикидки → mode ramp (добор) с проекцией веса', () => {
   const probe = S(40, 15, 4, { isCalibration: true });
   const p = ui.planExercise(item(), [probe], ctx(1), eng);
-  assert(p.mode === 'control' && p.rec.weight > 0 && p.calibration, JSON.stringify(p));
+  assert(p.mode === 'ramp' && p.rec.weight > 0 && p.calibration && p.calNo === 1, JSON.stringify(p));
 });
-t('после контрольного → mode work, держим вес', () => {
+t('прикидка села в диапазон (рабочий сет есть) → mode work, держим вес', () => {
   const probe = S(40, 15, 4, { isCalibration: true });
-  const control = S(50, 10, 2);
-  const p = ui.planExercise(item(), [probe, control], ctx(1), eng);
+  const landed = S(50, 10, 2);                       // залогирован рабочим
+  const p = ui.planExercise(item(), [probe, landed], ctx(1), eng);
   assert(p.mode === 'work' && p.rec.weight === 50, JSON.stringify(p));
+});
+t('3 прикидки мимо → mode work с расчётным весом (не тратим силы)', () => {
+  const cals = [S(30, 20, 5, { isCalibration: true }), S(40, 16, 4, { isCalibration: true }), S(50, 14, 4, { isCalibration: true })];
+  const p = ui.planExercise(item(), cals, ctx(1), eng);
+  assert(p.mode === 'work' && p.rec.weight > 50, JSON.stringify(p));
+});
+t('landedInRange: в диапазоне при RIR ≤ цель+1 — попал; вне — нет', () => {
+  const it = item();   // 8–12 повторов
+  assert(ui.landedInRange({ reps: 10, rir: 2 }, it, 2) === true);
+  assert(ui.landedInRange({ reps: 10, rir: 3 }, it, 2) === true);    // цель+1
+  assert(ui.landedInRange({ reps: 10, rir: 4 }, it, 2) === false);   // слишком легко
+  assert(ui.landedInRange({ reps: 14, rir: 2 }, it, 2) === false);   // выше диапазона
+  assert(ui.landedInRange({ reps: 6, rir: 1 }, it, 2) === false);    // ниже диапазона
 });
 
 console.log('— planExercise: обычный сценарий (есть история) —');

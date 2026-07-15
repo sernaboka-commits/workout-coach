@@ -610,8 +610,8 @@ const HELP_TERMS = {
     short: 'Оценка веса, который ты поднял бы на 1 раз, по формуле Эпли: вес × (1 + повторы/30). Считается от лучшего рабочего подхода с учётом RIR. Реально максимум не проверяем — это опасно и не нужно: e1RM растёт → сила растёт.',
   },
   calibration: {
-    title: 'Калибровка нового упражнения',
-    short: 'Для упражнения без истории приложение не знает твой рабочий вес и подбирает его за 2 шага: «разведка» (лёгкий подход НЕ до отказа) → расчёт по Эпли → «контроль» (проверка расчётного веса). Калибровочные подходы помечаются и не попадают в аналитику прогресса.',
+    title: 'Подбор веса добором',
+    short: 'Для упражнения без истории рабочий вес подбирается прикидками, как в зале: посильный вес → подход НЕ до отказа → если легко, приложение рассчитывает добавку по Эпли → следующая прикидка. Подход, попавший в рабочий диапазон повторов с усилием около целевого RIR, сразу засчитывается рабочим — с него начинается обычная работа. Промежуточные прикидки помечаются «кал.» и не попадают в аналитику прогресса.',
   },
   meso: {
     title: 'Мезоцикл 5+1',
@@ -657,8 +657,8 @@ const HELP_TOPICS = [
   },
   {
     id: 'calibration',
-    title: 'Калибровка: первый раз в новом упражнении',
-    body: 'Шаг 1 — разведка: возьми заведомо посильный вес (примерно 40–60% от того, что кажется рабочим) и сделай 10–15 повторов, остановившись ДАЛЕКО до отказа (RIR 4–5). Запиши вес, повторы и RIR. Шаг 2 — контроль: приложение по формуле Эпли спроецирует рабочий вес под твой целевой диапазон повторов и RIR недели — сделай контрольный подход с этим весом и запиши как вышло. Дальше идут обычные рабочие подходы с рекомендациями. Оба калибровочных подхода помечаются «кал.» и не участвуют в графиках прогресса и детекторе стагнации. Если контрольный вес ощущается неверно — просто запиши честный результат, следующая рекомендация скорректируется.',
+    title: 'Подбор веса: первый раз в новом упражнении',
+    body: 'Вес подбирается добором, как это реально делают в зале. Шаг 1 — прикидка: возьми заведомо посильный вес, сделай подход и остановись с запасом, не до отказа; запиши вес, повторы и RIR. Если сразу попал в рабочий диапазон повторов с усилием около целевого RIR — этот подход уже рабочий, вес найден. Если было легко — приложение по формуле Эпли рассчитает, сколько добавить, и предложит следующую прикидку (шаг 2, 3 — до посадки в диапазон; больше трёх прикидок не делаем, чтобы не тратить силы). Важно: прикидки НЕ доводятся до отказа — в новом движении техника ещё сырая, а отказ в прикидке съедает силы у рабочих подходов и повышает риск. Промежуточные прикидки помечаются «кал.» и не участвуют в графиках прогресса и детекторе стагнации.',
   },
   {
     id: 'meso',
@@ -1498,7 +1498,7 @@ function calibrate(probeSet, ctx) {
     confidence: +confidence.toFixed(2),
     targetReps,
     targetRIR,
-    reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}. Подтверди контрольным подходом.`,
+    reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}.`,
   };
 }
 
@@ -2361,23 +2361,33 @@ function _hint(id) {
   return (typeof hintBtn === 'function') ? hintBtn(id) : '';
 }
 
-/** Пошаговое пояснение калибровочного этапа (чистая функция).
+/** Попал ли подход в рабочий диапазон с усилием около целевого:
+ *  повторы в диапазоне и RIR не больше целевого+1. Такой прикидочный
+ *  подход сразу засчитывается рабочим — вес найден. */
+function landedInRange(set, item, targetRIR) {
+  return Number(set.reps) >= item.repRangeMin && Number(set.reps) <= item.repRangeMax &&
+    set.rir != null && Number(set.rir) <= Number(targetRIR) + 1;
+}
+
+/** Пошаговое пояснение подбора веса (чистая функция).
  *  → { step, title, text } | null */
-function calibrationGuide(plan) {
-  if (!plan) return null;
+function calibrationGuide(plan, item, targetRIR) {
+  if (!plan || !item) return null;
+  const range = `${item.repRangeMin}–${item.repRangeMax}`;
+  const landRule = `Попадёшь в ${range} повторов с запасом RIR ≤ ${Number(targetRIR) + 1} — вес найден, подход сразу засчитается рабочим.`;
   if (plan.mode === 'probe') {
     return {
-      step: '1 из 2',
-      title: 'Разведка — подбираем вес',
-      text: 'Новое упражнение: рабочий вес пока неизвестен. Возьми заведомо посильный вес (примерно половину от того, что кажется рабочим), сделай 10–15 повторов и остановись ДАЛЕКО до отказа (RIR 4–5). Запиши вес, повторы и RIR — по ним рассчитается рабочий вес.',
+      step: '1',
+      title: 'Прикидка — подбираем вес',
+      text: `Новое упражнение: рабочий вес пока неизвестен. Возьми заведомо посильный вес, сделай подход и остановись С ЗАПАСОМ, не до отказа. Запиши вес, повторы и RIR. ${landRule} Если было слишком легко — добавим вес и прикинем ещё раз.`,
     };
   }
-  if (plan.mode === 'control') {
+  if (plan.mode === 'ramp') {
     const w = plan.rec && plan.rec.weight != null ? `: ${plan.rec.weight} кг` : '';
     return {
-      step: '2 из 2',
-      title: 'Контроль — проверяем расчёт',
-      text: `По разведке рассчитан рабочий вес${w}. Сделай с ним контрольный подход на рекомендованные повторы и запиши, как вышло на самом деле. Если было тяжело или слишком легко — не страшно: следующая рекомендация подстроится.`,
+      step: String((plan.calNo || 1) + 1),
+      title: 'Добор веса',
+      text: `Прошлый подход был с большим запасом. Расчётный вес${w} — сделай с ним подход, снова не до отказа. ${landRule} Если опять легко — добавим ещё (до отказа прикидки не доводим: техника в новом движении важнее).`,
     };
   }
   return null;
@@ -2459,7 +2469,6 @@ function dayProgress(day, sessionSets) {
  */
 function planExercise(item, exSets, ctx, engine) {
   const work = exSets.filter((s) => !s.isCalibration);
-  const probe = exSets.find((s) => s.isCalibration);
   const hasHistory = (ctx.history || []).some(
     (h) => !h.isDeload && h.sets.some((s) => !s.isCalibration)
   );
@@ -2472,35 +2481,46 @@ function planExercise(item, exSets, ctx, engine) {
     return { mode: 'work', rec: engine.recommend(item.exerciseId, work.length + 1, ctx) };
   }
 
-  // калибровочный сценарий: истории нет
+  // подбор веса добором: истории нет — прикидка → добор → посадка в диапазон.
+  // Подход, попавший в диапазон при усилии около целевого (landedInRange),
+  // логируется как РАБОЧИЙ — тогда work.length > 0 и добор завершается.
   if (!hasHistory && !ctx.meso.isDeload) {
-    if (!probe) {
+    if (work.length > 0) {
+      // вес найден — обычные рабочие подходы от последнего рабочего
+      return { mode: 'work', rec: nextSetRec(work[work.length - 1], ctx, item, engine) };
+    }
+    const cals = exSets.filter((s) => s.isCalibration);
+    if (!cals.length) {
       return {
         mode: 'probe',
         rec: {
           weight: null,
           reps: Math.round((item.repRangeMin + item.repRangeMax) / 2),
           targetRIR: 4,
-          reason: 'Разведочный подход: 10–15 повторов, НЕ до отказа. Он калибровочный.',
+          reason: 'Прикидочный подход: посильный вес, НЕ до отказа.',
         },
       };
     }
-    if (work.length === 0) {
-      const target = Math.round((item.repRangeMin + item.repRangeMax) / 2);
-      const cal = engine.calibrate(probe, {
-        targetReps: target,
-        targetRIR: ctx.meso.targetRIR,
-        weightStep: ctx.exercise.weightStep,
-      });
+    const target = Math.round((item.repRangeMin + item.repRangeMax) / 2);
+    const last = cals[cals.length - 1];
+    const cal = engine.calibrate(last, {
+      targetReps: target,
+      targetRIR: ctx.meso.targetRIR,
+      weightStep: ctx.exercise.weightStep,
+    });
+    if (cals.length >= 3) {
+      // 3 прикидки не сели в диапазон — не тратим силы, расчётный вес рабочий
       return {
-        mode: 'control',
-        calibration: cal,
-        rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
+        mode: 'work',
+        rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: 'Прикидки закончились — расчётный вес считаем рабочим. ' + cal.reason },
       };
     }
-    // контрольный сделан — держим вес, повторы под целевой RIR
-    const prev = work[work.length - 1];
-    return { mode: 'work', rec: nextSetRec(prev, ctx, item, engine) };
+    return {
+      mode: 'ramp',
+      calNo: cals.length,
+      calibration: cal,
+      rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
+    };
   }
 
   // обычная рекомендация
@@ -2636,13 +2656,14 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
       const plan = planFor(item);
       const logged = exSets(item.exerciseId);
-      const badge = plan.mode === 'probe' ? '<span class="badge cal">калибровка</span>'
-        : plan.mode === 'control' ? '<span class="badge cal">контроль</span>'
+      const badge = plan.mode === 'probe' ? '<span class="badge cal">подбор веса</span>'
+        : plan.mode === 'ramp' ? '<span class="badge cal">добор веса</span>'
         : plan.mode === 'done' ? '<span class="badge ok">готово</span>' : '';
 
-      const rows = logged.map((s, i) => `
+      let workNo = 0;
+      const rows = logged.map((s) => `
         <div class="set-row done">
-          <span class="set-no">${s.isCalibration ? 'кал.' : '#' + (i + 1)}</span>
+          <span class="set-no">${s.isCalibration ? 'кал.' : '#' + (++workNo)}</span>
           <span class="set-res">${s.weight > 0 ? s.weight + ' кг × ' + s.reps : s.reps + ' повт'}${s.rir != null ? ' · RIR ' + s.rir : ''}</span>
           <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
         </div>`).join('');
@@ -2666,11 +2687,11 @@ function initWorkout(root, opts = {}) {
         const weightField = bw
           ? `<div class="bw-note">Собственный вес — прогрессия по повторам и RIR</div>`
           : entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null);
-        // пошаговое пояснение калибровки; текст reason тогда не дублируем
-        const guide = calibrationGuide(plan);
+        // пошаговое пояснение подбора веса; текст reason тогда не дублируем
+        const guide = calibrationGuide(plan, item, meso.targetRIR);
         const guideHtml = guide ? `
           <div class="cal-guide">
-            <b>Калибровка · шаг ${guide.step} — ${guide.title} ${_hint('calibration')}</b>
+            <b>Подбор веса · шаг ${guide.step} — ${guide.title} ${_hint('calibration')}</b>
             <div>${guide.text}</div>
           </div>` : '';
         active = `
@@ -2852,13 +2873,16 @@ function initWorkout(root, opts = {}) {
   function logCurrent(item, d) {
     ensureSession();
     const setNo = exSets(item.exerciseId).length + 1;
+    // прикидка, попавшая в диапазон при усилии около целевого, — уже
+    // рабочий подход: вес найден, добор на этом завершается
+    const isCal = (d.mode === 'probe' || d.mode === 'ramp') && !landedInRange(d, item, meso.targetRIR);
     const res = S.logSet(state, session.id, {
       exerciseId: item.exerciseId,
       setNo,
       weight: d.weight,
       reps: d.reps,
       rir: d.rir,
-      isCalibration: d.mode === 'probe',
+      isCalibration: isCal,
     });
     state = res.state;
     S.save(state);
@@ -2933,7 +2957,7 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, landedInRange,
   };
 }
 

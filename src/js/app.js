@@ -63,7 +63,7 @@ function initApp() {
         <div class="wk-title">Настройки</div>
 
         <section class="an-card">
-          <div class="an-head"><b>Мезоцикл</b></div>
+          <div class="an-head"><b>Мезоцикл ${hintBtn('meso')}</b></div>
           <div class="meso-row">
             <div class="meso-badge">Цикл ${m.cycleNo}</div>
             <div class="meso-badge">Неделя ${m.weekNo}${m.isDeload ? ' · делоуд' : ''}</div>
@@ -100,6 +100,15 @@ function initApp() {
             </label>
           </div>
           <div class="cx-err" id="backup-msg"></div>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>База знаний</b><small>методика и термины</small></div>
+          ${HELP_TOPICS.map((t) => `
+            <details class="kb-topic">
+              <summary>${t.title}</summary>
+              <div class="kb-body">${t.body}</div>
+            </details>`).join('')}
         </section>
       </div>`;
 
@@ -171,10 +180,57 @@ function initApp() {
       .catch(() => {});
   }
 
+  /* ---------- подсказки «?» у терминов (единый обработчик) ----------
+   * Кнопки hintBtn() рассыпаны по всем экранам; попап вставляется после
+   * ближайшего блока и живёт до клика/перерисовки экрана. */
+  document.addEventListener('click', (e) => {
+    const q = e.target.closest('.hint-q');
+    const openPop = document.querySelector('.hint-pop');
+    if (openPop && (!q || openPop._src === q)) openPop.remove();   // клик мимо/повторный — закрыть
+    if (!q) return;
+    if (openPop && openPop._src === q) return;
+    const t = HELP_TERMS[q.dataset.hint];
+    if (!t) return;
+    const box = document.createElement('div');
+    box.className = 'hint-pop';
+    box._src = q;
+    box.innerHTML = `<b>${t.title}</b><div>${t.short}</div>`;
+    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line') || q.parentElement;
+    anchor.insertAdjacentElement('afterend', box);
+  });
+
+  /* ---------- плашка «доступна новая версия» ----------
+   * SW при установке делает skipWaiting, поэтому достаточно предложить
+   * перезагрузку — network-first подтянет свежий index.html. */
+  function watchUpdates(reg) {
+    const show = () => {
+      if (document.getElementById('upd-bar')) return;
+      const bar = document.createElement('div');
+      bar.id = 'upd-bar';
+      bar.innerHTML = `<span>Доступна новая версия</span><button id="upd-go">Обновить</button>`;
+      document.body.appendChild(bar);
+      bar.querySelector('#upd-go').addEventListener('click', () => location.reload());
+    };
+    if (reg.waiting) show();
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        // controller есть = это обновление, а не первая установка
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) show();
+      });
+    });
+    // проверяем обновления при возвращении в приложение (PWA живёт долго)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) reg.update().catch(() => {});
+    });
+  }
+
   // офлайн: регистрируем service worker (только в защищённом контексте — Pages/localhost)
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
       (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', () =>
+      navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {}));
   }
 
   // старт: экран тренировки; мягкое напоминание о бэкапе

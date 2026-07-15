@@ -410,6 +410,48 @@ html, body {
 .ml-val { flex: 0 0 auto; min-width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
 .ml-note { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.4; }
 
+/* --- подсказки «?» и база знаний --- */
+.hint-q {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 700;
+  cursor: pointer; vertical-align: text-bottom; padding: 0;
+}
+.hint-pop {
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 12.5px; line-height: 1.45;
+}
+.hint-pop b { display: block; margin-bottom: 4px; }
+.hint-pop div { color: var(--muted); }
+.kb-topic { border-top: 1px solid var(--line); }
+.kb-topic:first-of-type { border-top: 0; }
+.kb-topic summary {
+  padding: 10px 2px; cursor: pointer; font-size: 13.5px; font-weight: 600; list-style: none;
+}
+.kb-topic summary::before { content: '▸ '; color: var(--accent); }
+.kb-topic[open] summary::before { content: '▾ '; }
+.kb-body { color: var(--muted); font-size: 12.5px; line-height: 1.5; padding: 0 2px 10px; }
+
+/* --- калибровка: пошаговое пояснение --- */
+.cal-guide {
+  background: var(--surface-2); border-left: 3px solid #b07cff; border-radius: 10px;
+  padding: 10px 12px; margin: 8px 0; font-size: 12.5px; line-height: 1.45;
+}
+.cal-guide b { display: block; margin-bottom: 4px; }
+.cal-guide div { color: var(--muted); }
+
+/* --- плашка обновления --- */
+#upd-bar {
+  position: fixed; left: 12px; right: 12px; bottom: 76px; z-index: 60;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface-2); border: 1px solid var(--accent); border-radius: 12px;
+  padding: 10px 14px; font-size: 13.5px; box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+#upd-bar button {
+  background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+  padding: 8px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+
 .stag { background: var(--surface-2); border-left: 3px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .stag-name { font-weight: 700; }
 .stag-hint { color: var(--muted); font-size: 13px; margin-top: 3px; }
@@ -550,6 +592,111 @@ html, body {
   </nav>
 
   <!-- Порядок важен: библиотека → store → движок/аналитика → экраны → контроллер -->
+  <script>
+/* ============================================================
+ * help.js — база знаний и подсказки к терминам (чистые данные + хелперы)
+ * HELP_TERMS  — короткие пояснения для кнопок «?» рядом с терминами
+ * HELP_TOPICS — развёрнутые статьи для карточки «База знаний» (настройки)
+ * hintBtn(id) — HTML кнопки «?»; обработчик кликов — initHints() в app.js
+ * ============================================================ */
+
+const HELP_TERMS = {
+  rir: {
+    title: 'RIR — повторы в запасе',
+    short: 'Reps In Reserve: сколько повторов ты ЕЩЁ мог бы сделать до отказа. RIR 2 — остановился за 2 повтора до предела. Это способ дозировать усилие без постоянной работы до отказа: стимул почти тот же, а усталость и риск травмы ниже. Оценивай честно — на RIR построены все рекомендации.',
+  },
+  e1rm: {
+    title: 'e1RM — расчётный максимум',
+    short: 'Оценка веса, который ты поднял бы на 1 раз, по формуле Эпли: вес × (1 + повторы/30). Считается от лучшего рабочего подхода с учётом RIR. Реально максимум не проверяем — это опасно и не нужно: e1RM растёт → сила растёт.',
+  },
+  calibration: {
+    title: 'Калибровка нового упражнения',
+    short: 'Для упражнения без истории приложение не знает твой рабочий вес и подбирает его за 2 шага: «разведка» (лёгкий подход НЕ до отказа) → расчёт по Эпли → «контроль» (проверка расчётного веса). Калибровочные подходы помечаются и не попадают в аналитику прогресса.',
+  },
+  meso: {
+    title: 'Мезоцикл 5+1',
+    short: '5 недель роста + 1 неделя разгрузки (делоуд). Усилие нарастает по неделям через целевой RIR: нед.1 — RIR 3 (легко), нед.2–3 — RIR 2, нед.4–5 — RIR 1 (почти до отказа), потом делоуд и новый цикл. Так усталость не копится бесконечно, а прогресс идёт волнами.',
+  },
+  deload: {
+    title: 'Делоуд — разгрузочная неделя',
+    short: 'Неделя восстановления после 5 недель роста: 60% рабочего веса, половина подходов, RIR 4 (очень легко). Мышцы и суставы восстанавливаются, накопленная усталость уходит — следующий цикл начинаешь свежим и сильнее. Пропускать не стоит: без разгрузки прогресс упирается в усталость.',
+  },
+  'double-progression': {
+    title: 'Двойная прогрессия',
+    short: 'Два рычага роста по очереди: сначала добавляешь ПОВТОРЫ в заданном диапазоне (например 8–12), а когда все рабочие подходы дошли до потолка диапазона — добавляется ВЕС, и повторы возвращаются к нижней границе. Простое правило, которое надёжно двигает нагрузку вверх.',
+  },
+  'effective-sets': {
+    title: 'Эффективные сеты по мышцам',
+    short: 'Каждый подход засчитывается мышцам ДОЛЯМИ: целевой — 1.0, сильному помощнику — 0.5, второстепенному — 0.25 (методика «дробных сетов» Renaissance Periodization). Пример: подход жима лёжа = 1.0 середине груди + 0.5 передней дельте + 0.5 трицепсу. Так видно реальную недельную нагрузку каждой мышцы, включая скрытую работу в базовых движениях.',
+  },
+  tonnage: {
+    title: 'Тоннаж',
+    short: 'Суммарно поднятый вес: вес × повторы по всем подходам. В разбивке по мышцам умножается ещё на долю участия мышцы. Грубый, но наглядный показатель объёма работы; для упражнений с собственным весом считается только доп. отягощение.',
+  },
+  corridor: {
+    title: 'Коридор объёма 10–20 сетов',
+    short: 'Ориентир недельного объёма на группу мышц для роста: меньше ~10 рабочих подходов — стимула может не хватать, больше ~20 — риск не восстановиться. Это диапазон из исследований гипертрофии (Schoenfeld, Israetel), а не жёсткое правило: смотри на прогресс и самочувствие.',
+  },
+  stagnation: {
+    title: 'Стагнация',
+    short: 'Детектор застоя: если лучший e1RM упражнения не растёт 3+ недели (делоуд не в счёт), приложение подсвечивает его. Это гипотеза, а не приговор: чаще всего помогает смена вариации упражнения, проверка сна/питания или снижение лишнего объёма.',
+  },
+};
+
+/* Развёрнутые статьи для карточки «База знаний». */
+const HELP_TOPICS = [
+  {
+    id: 'method',
+    title: 'Методика: почему приложение советует именно так',
+    body: 'Цель — гипертрофия (рост мышц). В основе три проверенных принципа. 1) Двойная прогрессия: сначала повторы до потолка диапазона, затем +вес и возврат к низу диапазона — так нагрузка растёт постепенно и контролируемо. 2) Автрегуляция по RIR: усилие дозируется «повторами в запасе», а не работой до отказа в каждом подходе — стимул сохраняется, усталость и техника под контролем. 3) Мезоциклы 5+1: пять недель с нарастающим усилием и разгрузочная неделя. Источники подхода: Eric Helms (RIR-автрегуляция), Mike Israetel / Renaissance Periodization (объём MEV→MRV, дробные сеты), Brad Schoenfeld (исследования объёма и гипертрофии).',
+  },
+  {
+    id: 'rir',
+    title: 'RIR — как оценивать усилие',
+    body: 'RIR (Reps In Reserve) — сколько повторов осталось «в запасе» до отказа. RIR 0 — отказ, RIR 2 — мог бы сделать ещё два. Оценка приходит с опытом: если сомневаешься, спроси себя после подхода «сколько бы я ещё выжал с правильной техникой?». Целевой RIR задаёт неделя мезоцикла: нед.1 — RIR 3, нед.2–3 — RIR 2, нед.4–5 — RIR 1, делоуд — RIR 4. Если фактический RIR 0 случился в двух и более подходах за тренировку — вес не наращивается (защита от перегруза), при повторении — вес снижается на 5%.',
+  },
+  {
+    id: 'calibration',
+    title: 'Калибровка: первый раз в новом упражнении',
+    body: 'Шаг 1 — разведка: возьми заведомо посильный вес (примерно 40–60% от того, что кажется рабочим) и сделай 10–15 повторов, остановившись ДАЛЕКО до отказа (RIR 4–5). Запиши вес, повторы и RIR. Шаг 2 — контроль: приложение по формуле Эпли спроецирует рабочий вес под твой целевой диапазон повторов и RIR недели — сделай контрольный подход с этим весом и запиши как вышло. Дальше идут обычные рабочие подходы с рекомендациями. Оба калибровочных подхода помечаются «кал.» и не участвуют в графиках прогресса и детекторе стагнации. Если контрольный вес ощущается неверно — просто запиши честный результат, следующая рекомендация скорректируется.',
+  },
+  {
+    id: 'meso',
+    title: 'Мезоцикл и делоуд',
+    body: 'Тренировки идут циклами: 5 недель роста + 1 неделя делоуда. Внутри цикла усилие нарастает через целевой RIR (от «легко» RIR 3 к «почти предел» RIR 1). Делоуд — 60% рабочего веса и половина подходов при RIR 4: это не потерянная неделя, а часть плана — суставы, связки и нервная система восстанавливаются, и следующий цикл начинается с новых сил. Неделя завершается вручную кнопкой «Завершить неделю» в настройках; делоуд можно сдвинуть на ±1 неделю, если чувствуешь себя бодро или наоборот.',
+  },
+  {
+    id: 'muscles',
+    title: 'Нагрузка по мышцам: эффективные сеты и тоннаж',
+    body: 'Базовые упражнения нагружают не одну мышцу: жим лёжа — это грудь, но также передняя дельта и трицепс. Чтобы видеть честную картину, каждый подход раскладывается на доли: целевая мышца 1.0, сильный синергист 0.5, второстепенная 0.25 («дробные сеты» Renaissance Periodization). В карточке «Нагрузка по мышцам» видно, сколько эффективных сетов и тоннажа (вес × повторы × доля) собрала каждая конкретная мышца за неделю — вплоть до пучков: верх/середина/низ груди, три пучка дельт, бицепс/трицепс и т.д. Это помогает находить перекосы: например, трицепс часто получает много скрытой работы от жимов, и добавлять ему изоляцию не нужно.',
+  },
+  {
+    id: 'volume',
+    title: 'Недельный объём и коридор 10–20',
+    body: 'Объём (число рабочих подходов на группу мышц в неделю) — главный управляемый фактор роста. Ориентир: ~10 подходов — нижняя граница эффективной дозы, ~20 — верхняя (дальше обычно растёт усталость, а не мышцы). График «Объём за неделю» подсвечивает: жёлтый — маловато, красный — перебор. Это ориентиры из мета-анализов (Schoenfeld) и практики RP, а не догма: новичкам хватает меньшего, отстающим группам можно временно давать больше.',
+  },
+  {
+    id: 'e1rm-stagnation',
+    title: 'e1RM, прогресс и стагнация',
+    body: 'e1RM — расчётный разовый максимум по формуле Эпли (вес × (1 + повторы/30)), считается от лучшего подхода с поправкой на RIR. Его график — главный индикатор прогресса силы без опасных проходок на максимум. Если пик e1RM не растёт 3+ недели (делоуд исключается) — упражнение попадает в «Стагнацию». Что делать: чаще всего помогает смена вариации (например, жим штанги → жим гантелей), проверка сна/питания/стресса или снижение лишнего объёма. Это подсказка для размышления, а не команда.',
+  },
+  {
+    id: 'safety',
+    title: 'Данные: где хранятся и как не потерять',
+    body: 'Вся история — только на этом устройстве (localStorage браузера), на сервер ничего не уходит. Обновления приложения данные не трогают. Чтобы не потерять историю при поломке/потере телефона: раз в пару недель «Скачать JSON» и класть файл в облако; восстановление — «Импорт JSON». Не очищай данные сайта в настройках браузера.',
+  },
+];
+
+/** Кнопка «?» рядом с термином. Обработчик — initHints() (app.js). */
+function hintBtn(id) {
+  return HELP_TERMS[id] ? `<button class="hint-q" type="button" data-hint="${id}" aria-label="пояснение">?</button>` : '';
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { HELP_TERMS, HELP_TOPICS, hintBtn };
+}
+
+</script>
   <script>
 /* ============================================================
  * exercises.js — встроенная библиотека упражнений
@@ -2209,6 +2356,33 @@ function pickDayForDate(days, idx) {
 
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
+/* кнопка «?» из help.js; в node-тестах help.js не подключён — пусто */
+function _hint(id) {
+  return (typeof hintBtn === 'function') ? hintBtn(id) : '';
+}
+
+/** Пошаговое пояснение калибровочного этапа (чистая функция).
+ *  → { step, title, text } | null */
+function calibrationGuide(plan) {
+  if (!plan) return null;
+  if (plan.mode === 'probe') {
+    return {
+      step: '1 из 2',
+      title: 'Разведка — подбираем вес',
+      text: 'Новое упражнение: рабочий вес пока неизвестен. Возьми заведомо посильный вес (примерно половину от того, что кажется рабочим), сделай 10–15 повторов и остановись ДАЛЕКО до отказа (RIR 4–5). Запиши вес, повторы и RIR — по ним рассчитается рабочий вес.',
+    };
+  }
+  if (plan.mode === 'control') {
+    const w = plan.rec && plan.rec.weight != null ? `: ${plan.rec.weight} кг` : '';
+    return {
+      step: '2 из 2',
+      title: 'Контроль — проверяем расчёт',
+      text: `По разведке рассчитан рабочий вес${w}. Сделай с ним контрольный подход на рекомендованные повторы и запиши, как вышло на самом деле. Если было тяжело или слишком легко — не страшно: следующая рекомендация подстроится.`,
+    };
+  }
+  return null;
+}
+
 /** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
 function entryField(exId, field, label, value, p, step, mode, min, max) {
   const mn = min != null ? ` min="${min}"` : '';
@@ -2452,8 +2626,8 @@ function initWorkout(root, opts = {}) {
     parts.push(`
       <header class="wk-head">
         <div>
-          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
-          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR}</div>
+          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД ' + _hint('deload') : ''}</div>
+          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
       </header>`);
@@ -2492,8 +2666,16 @@ function initWorkout(root, opts = {}) {
         const weightField = bw
           ? `<div class="bw-note">Собственный вес — прогрессия по повторам и RIR</div>`
           : entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null);
+        // пошаговое пояснение калибровки; текст reason тогда не дублируем
+        const guide = calibrationGuide(plan);
+        const guideHtml = guide ? `
+          <div class="cal-guide">
+            <b>Калибровка · шаг ${guide.step} — ${guide.title} ${_hint('calibration')}</b>
+            <div>${guide.text}</div>
+          </div>` : '';
         active = `
-          <div class="rec-line">${recVals}${plan.rec ? plan.rec.reason : ''}</div>
+          ${guideHtml}
+          <div class="rec-line">${recVals}${!guide && plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
             ${weightField}
             ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
@@ -2751,7 +2933,7 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
   };
 }
 
@@ -3279,6 +3461,7 @@ function initAnalytics(root, opts = {}) {
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
   const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
+  const hint = (id) => (typeof hintBtn === 'function' ? hintBtn(id) : '');
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib);
@@ -3379,7 +3562,7 @@ function initAnalytics(root, opts = {}) {
     return `
       <section class="an-card">
         <div class="an-head">
-          <b>Нагрузка по мышцам</b>
+          <b>Нагрузка по мышцам ${hint('effective-sets')}</b>
           <div class="cal-nav">
             <button class="mini" data-act="ml-prev">‹</button>
             <span class="cal-title">${weekLabel}</span>
@@ -3404,7 +3587,7 @@ function initAnalytics(root, opts = {}) {
 
         <section class="an-card">
           <div class="an-head">
-            <b>Динамика e1RM</b>
+            <b>Динамика e1RM ${hint('e1rm')}</b>
             <select class="sel" id="an-ex">
               ${exs.map((e) => `<option value="${e.id}"${e.id === selEx ? ' selected' : ''}>${e.name}</option>`).join('') || '<option>нет данных</option>'}
             </select>
@@ -3413,14 +3596,14 @@ function initAnalytics(root, opts = {}) {
         </section>
 
         <section class="an-card">
-          <div class="an-head"><b>Объём за неделю</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
+          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
           <canvas id="an-vol" class="chart"></canvas>
         </section>
 
         ${muscleLoadHtml()}
 
         <section class="an-card">
-          <div class="an-head"><b>Стагнация</b></div>
+          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b></div>
           ${stg.length
             ? stg.map((s) => `<div class="stag"><div class="stag-name">${s.name}</div><div class="stag-hint">${s.hint}</div></div>`).join('')
             : '<div class="pi-empty">Нет застоя — e1RM растёт по всем упражнениям с историей.</div>'}
@@ -3978,7 +4161,7 @@ function initApp() {
         <div class="wk-title">Настройки</div>
 
         <section class="an-card">
-          <div class="an-head"><b>Мезоцикл</b></div>
+          <div class="an-head"><b>Мезоцикл ${hintBtn('meso')}</b></div>
           <div class="meso-row">
             <div class="meso-badge">Цикл ${m.cycleNo}</div>
             <div class="meso-badge">Неделя ${m.weekNo}${m.isDeload ? ' · делоуд' : ''}</div>
@@ -4015,6 +4198,15 @@ function initApp() {
             </label>
           </div>
           <div class="cx-err" id="backup-msg"></div>
+        </section>
+
+        <section class="an-card">
+          <div class="an-head"><b>База знаний</b><small>методика и термины</small></div>
+          ${HELP_TOPICS.map((t) => `
+            <details class="kb-topic">
+              <summary>${t.title}</summary>
+              <div class="kb-body">${t.body}</div>
+            </details>`).join('')}
         </section>
       </div>`;
 
@@ -4086,10 +4278,57 @@ function initApp() {
       .catch(() => {});
   }
 
+  /* ---------- подсказки «?» у терминов (единый обработчик) ----------
+   * Кнопки hintBtn() рассыпаны по всем экранам; попап вставляется после
+   * ближайшего блока и живёт до клика/перерисовки экрана. */
+  document.addEventListener('click', (e) => {
+    const q = e.target.closest('.hint-q');
+    const openPop = document.querySelector('.hint-pop');
+    if (openPop && (!q || openPop._src === q)) openPop.remove();   // клик мимо/повторный — закрыть
+    if (!q) return;
+    if (openPop && openPop._src === q) return;
+    const t = HELP_TERMS[q.dataset.hint];
+    if (!t) return;
+    const box = document.createElement('div');
+    box.className = 'hint-pop';
+    box._src = q;
+    box.innerHTML = `<b>${t.title}</b><div>${t.short}</div>`;
+    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line') || q.parentElement;
+    anchor.insertAdjacentElement('afterend', box);
+  });
+
+  /* ---------- плашка «доступна новая версия» ----------
+   * SW при установке делает skipWaiting, поэтому достаточно предложить
+   * перезагрузку — network-first подтянет свежий index.html. */
+  function watchUpdates(reg) {
+    const show = () => {
+      if (document.getElementById('upd-bar')) return;
+      const bar = document.createElement('div');
+      bar.id = 'upd-bar';
+      bar.innerHTML = `<span>Доступна новая версия</span><button id="upd-go">Обновить</button>`;
+      document.body.appendChild(bar);
+      bar.querySelector('#upd-go').addEventListener('click', () => location.reload());
+    };
+    if (reg.waiting) show();
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        // controller есть = это обновление, а не первая установка
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) show();
+      });
+    });
+    // проверяем обновления при возвращении в приложение (PWA живёт долго)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) reg.update().catch(() => {});
+    });
+  }
+
   // офлайн: регистрируем service worker (только в защищённом контексте — Pages/localhost)
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
       (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', () =>
+      navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {}));
   }
 
   // старт: экран тренировки; мягкое напоминание о бэкапе

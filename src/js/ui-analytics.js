@@ -65,6 +65,7 @@ function initAnalytics(root, opts = {}) {
   const lib = opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []);
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
   const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
+  const hint = (id) => (typeof hintBtn === 'function' ? hintBtn(id) : '');
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib);
@@ -165,7 +166,7 @@ function initAnalytics(root, opts = {}) {
     return `
       <section class="an-card">
         <div class="an-head">
-          <b>Нагрузка по мышцам</b>
+          <b>Нагрузка по мышцам ${hint('effective-sets')}</b>
           <div class="cal-nav">
             <button class="mini" data-act="ml-prev">‹</button>
             <span class="cal-title">${weekLabel}</span>
@@ -190,7 +191,7 @@ function initAnalytics(root, opts = {}) {
 
         <section class="an-card">
           <div class="an-head">
-            <b>Динамика e1RM</b>
+            <b>Динамика e1RM ${hint('e1rm')}</b>
             <select class="sel" id="an-ex">
               ${exs.map((e) => `<option value="${e.id}"${e.id === selEx ? ' selected' : ''}>${e.name}</option>`).join('') || '<option>нет данных</option>'}
             </select>
@@ -199,14 +200,14 @@ function initAnalytics(root, opts = {}) {
         </section>
 
         <section class="an-card">
-          <div class="an-head"><b>Объём за неделю</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
+          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
           <canvas id="an-vol" class="chart"></canvas>
         </section>
 
         ${muscleLoadHtml()}
 
         <section class="an-card">
-          <div class="an-head"><b>Стагнация</b></div>
+          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b></div>
           ${stg.length
             ? stg.map((s) => `<div class="stag"><div class="stag-name">${s.name}</div><div class="stag-hint">${s.hint}</div></div>`).join('')
             : '<div class="pi-empty">Нет застоя — e1RM растёт по всем упражнениям с историей.</div>'}

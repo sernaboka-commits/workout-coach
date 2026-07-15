@@ -43,6 +43,33 @@ function pickDayForDate(days, idx) {
 
 /* ---------- чистые хелперы (тестируемые) ---------- */
 
+/* кнопка «?» из help.js; в node-тестах help.js не подключён — пусто */
+function _hint(id) {
+  return (typeof hintBtn === 'function') ? hintBtn(id) : '';
+}
+
+/** Пошаговое пояснение калибровочного этапа (чистая функция).
+ *  → { step, title, text } | null */
+function calibrationGuide(plan) {
+  if (!plan) return null;
+  if (plan.mode === 'probe') {
+    return {
+      step: '1 из 2',
+      title: 'Разведка — подбираем вес',
+      text: 'Новое упражнение: рабочий вес пока неизвестен. Возьми заведомо посильный вес (примерно половину от того, что кажется рабочим), сделай 10–15 повторов и остановись ДАЛЕКО до отказа (RIR 4–5). Запиши вес, повторы и RIR — по ним рассчитается рабочий вес.',
+    };
+  }
+  if (plan.mode === 'control') {
+    const w = plan.rec && plan.rec.weight != null ? `: ${plan.rec.weight} кг` : '';
+    return {
+      step: '2 из 2',
+      title: 'Контроль — проверяем расчёт',
+      text: `По разведке рассчитан рабочий вес${w}. Сделай с ним контрольный подход на рекомендованные повторы и запиши, как вышло на самом деле. Если было тяжело или слишком легко — не страшно: следующая рекомендация подстроится.`,
+    };
+  }
+  return null;
+}
+
 /** Поле ввода подхода: подпись + [−][input][+] на всю ширину. */
 function entryField(exId, field, label, value, p, step, mode, min, max) {
   const mn = min != null ? ` min="${min}"` : '';
@@ -286,8 +313,8 @@ function initWorkout(root, opts = {}) {
     parts.push(`
       <header class="wk-head">
         <div>
-          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД' : ''}</div>
-          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR}</div>
+          <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД ' + _hint('deload') : ''}</div>
+          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
       </header>`);
@@ -326,8 +353,16 @@ function initWorkout(root, opts = {}) {
         const weightField = bw
           ? `<div class="bw-note">Собственный вес — прогрессия по повторам и RIR</div>`
           : entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null);
+        // пошаговое пояснение калибровки; текст reason тогда не дублируем
+        const guide = calibrationGuide(plan);
+        const guideHtml = guide ? `
+          <div class="cal-guide">
+            <b>Калибровка · шаг ${guide.step} — ${guide.title} ${_hint('calibration')}</b>
+            <div>${guide.text}</div>
+          </div>` : '';
         active = `
-          <div class="rec-line">${recVals}${plan.rec ? plan.rec.reason : ''}</div>
+          ${guideHtml}
+          <div class="rec-line">${recVals}${!guide && plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
             ${weightField}
             ${entryField(item.exerciseId, 'reps', 'Повторы', d.reps, 'r', 1, 'numeric', 1, null)}
@@ -585,6 +620,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
   };
 }

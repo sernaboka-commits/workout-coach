@@ -22,7 +22,9 @@
  *   - Перегруз: RIR 0 в 2+ сетах → удержание; повторно → −5%
  *   - Делоуд: 60% рабочего веса, 50% сетов
  *   - Прогрессия: все сеты у потолка повторов → +1 шаг веса, возврат к низу
- *   - Калибровка: разведочный подход → проекция по Эпли → контрольный подход
+ *   - Калибровка: первая тренировка — лесенка прикидок (легко → +вес → ...
+ *     до низа диапазона повторов, не до отказа); рабочий вес — проекция
+ *     лучшего e1RM лесенки на следующую тренировку. Подбор можно пропустить.
  * ============================================================ */
 
 /* ---------- утилиты ---------- */
@@ -179,8 +181,10 @@ function shiftDeload(state, delta) {
 function context(state, exerciseId, item, exerciseHistoryFn) {
   const meso = mesoStatus(state);
   const exercise = state.exercises.find((e) => e.id === exerciseId) || { weightStep: state.settings.weightStepDefault };
+  // калибровочные сеты нужны в истории: из них берётся рабочий вес после
+  // калибровочной тренировки; фильтрация — внутри recommend/planExercise
   const history = exerciseHistoryFn
-    ? exerciseHistoryFn(state, exerciseId, { includeCalibration: false, limit: 10 })
+    ? exerciseHistoryFn(state, exerciseId, { includeCalibration: true, limit: 10 })
     : [];
   return { meso, item, exercise, history };
 }
@@ -217,6 +221,25 @@ function calibrate(probeSet, ctx) {
     targetRIR,
     reason: `Проекция по Эпли: e1RM≈${e1rm.toFixed(1)} кг → ${weight} кг под ${targetReps}×RIR${targetRIR}.`,
   };
+}
+
+/**
+ * Рабочий вес из калибровочной лесенки: лучший e1RM среди прикидок →
+ * проекция на целевые повторы/RIR.
+ * calSets: [{ weight, reps, rir }] — прикидки (не до отказа).
+ * → { weight, e1rm, targetReps, targetRIR } | null
+ */
+function weightFromLadder(calSets, { targetReps, targetRIR = 2, weightStep = 2.5 } = {}) {
+  const sets = (calSets || []).filter((s) => Number(s.weight) > 0 && Number(s.reps) > 0);
+  if (!sets.length) return null;
+  let best = 0;
+  for (const s of sets) {
+    const rtf = Number(s.reps) + (s.rir == null ? 0 : Number(s.rir));
+    const v = epley1rm(Number(s.weight), rtf);
+    if (v > best) best = v;
+  }
+  const weight = roundToStep(best / (1 + (targetReps + targetRIR) / 30), weightStep);
+  return { weight, e1rm: +best.toFixed(1), targetReps, targetRIR };
 }
 
 /* ---------- рекомендация на подход ---------- */
@@ -259,8 +282,22 @@ function recommend(exerciseId, setNo, ctx) {
       reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.` };
   }
 
-  // нет истории → режим калибровки
+  // нет истории рабочих сетов
   if (history.length === 0) {
+    // но есть калибровочная лесенка прошлой тренировки → рабочий вес из неё
+    const calSess = (ctx.history || []).filter(
+      (h) => !h.isDeload && h.sets.some((s) => s.isCalibration)
+    );
+    const ladder = calSess.length ? calSess[0].sets.filter((s) => s.isCalibration) : [];
+    const mid = Math.round((item.repRangeMin + item.repRangeMax) / 2);
+    const wl = weightFromLadder(ladder, { targetReps: mid, targetRIR, weightStep: step });
+    if (wl) {
+      return {
+        weight: wl.weight, reps: mid, targetRIR,
+        isDeload: meso.isDeload, needsCalibration: false, lastResult: null,
+        reason: `Рабочий вес из калибровки (e1RM≈${wl.e1rm} кг): ${wl.weight} кг под ${mid}×RIR${targetRIR}.`,
+      };
+    }
     return {
       weight: null,
       reps: item.repRangeMin,
@@ -268,7 +305,7 @@ function recommend(exerciseId, setNo, ctx) {
       isDeload: meso.isDeload,
       needsCalibration: true,
       lastResult: null,
-      reason: 'Нет истории по упражнению — нужна калибровка (разведочный подход).',
+      reason: 'Нет истории по упражнению — нужна калибровочная тренировка (лесенка прикидок).',
     };
   }
 
@@ -349,6 +386,7 @@ if (typeof module !== 'undefined') {
     shiftDeload,
     context,
     calibrate,
+    weightFromLadder,
     recommend,
   };
 }

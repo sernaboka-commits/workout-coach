@@ -423,6 +423,7 @@ html, body {
 }
 .cal-guide b { display: block; margin-bottom: 4px; }
 .cal-guide div { color: var(--muted); }
+.cal-skip { margin-top: 8px; }
 
 /* --- плашка обновления --- */
 #upd-bar {

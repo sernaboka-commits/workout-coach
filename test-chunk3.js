@@ -65,29 +65,49 @@ t('нет сетов → mode probe', () => {
   const p = ui.planExercise(item(), [], ctx(1), eng);
   assert(p.mode === 'probe' && p.rec.weight === null, JSON.stringify(p));
 });
-t('после лёгкой прикидки → mode ramp (добор) с проекцией веса', () => {
-  const probe = S(40, 15, 4, { isCalibration: true });
+t('лёгкая прикидка → mode ramp: следующая ступень лесенки тяжелее', () => {
+  const probe = S(30, 15, 4, { isCalibration: true });
   const p = ui.planExercise(item(), [probe], ctx(1), eng);
-  assert(p.mode === 'ramp' && p.rec.weight > 0 && p.calibration && p.calNo === 1, JSON.stringify(p));
+  assert(p.mode === 'ramp' && p.calNo === 1, JSON.stringify(p));
+  assert(p.rec.weight > 30, 'вес должен вырасти: ' + p.rec.weight);
 });
-t('прикидка села в диапазон (рабочий сет есть) → mode work, держим вес', () => {
-  const probe = S(40, 15, 4, { isCalibration: true });
-  const landed = S(50, 10, 2);                       // залогирован рабочим
-  const p = ui.planExercise(item(), [probe, landed], ctx(1), eng);
-  assert(p.mode === 'work' && p.rec.weight === 50, JSON.stringify(p));
+t('лесенка идёт, пока повторы выше низа диапазона (12 → ещё ступень)', () => {
+  const cals = [S(30, 15, 4, { isCalibration: true }), S(35, 12, 3, { isCalibration: true })];
+  const p = ui.planExercise(item(), cals, ctx(1), eng);   // диапазон 8–12, 12 > 8
+  assert(p.mode === 'ramp' && p.rec.weight > 35, JSON.stringify(p));
 });
-t('3 прикидки мимо → mode work с расчётным весом (не тратим силы)', () => {
-  const cals = [S(30, 20, 5, { isCalibration: true }), S(40, 16, 4, { isCalibration: true }), S(50, 14, 4, { isCalibration: true })];
+t('повторы спустились к низу диапазона → cal-done с рабочим весом', () => {
+  const cals = [S(30, 15, 4, { isCalibration: true }), S(35, 12, 3, { isCalibration: true }), S(40, 8, 2, { isCalibration: true })];
+  const p = ui.planExercise(item(), cals, ctx(1), eng);   // 8 <= 8 (низ)
+  assert(p.mode === 'cal-done' && p.calCount === 3 && p.workWeight > 0, JSON.stringify(p));
+});
+t('лимит прикидок (workSets+1) → cal-done, даже если повторы высокие', () => {
+  const cals = [S(30, 15, 5, { isCalibration: true }), S(35, 14, 4, { isCalibration: true }),
+                S(40, 13, 4, { isCalibration: true }), S(45, 13, 3, { isCalibration: true })];
+  const p = ui.planExercise(item({ workSets: 3 }), cals, ctx(1), eng);   // кап = 4
+  assert(p.mode === 'cal-done' && p.workWeight > 0, JSON.stringify(p));
+});
+t('вся лесенка калибровочная: после cal-done рабочих сетов в сессии нет', () => {
+  const cals = [S(30, 15, 4, { isCalibration: true }), S(40, 8, 2, { isCalibration: true })];
   const p = ui.planExercise(item(), cals, ctx(1), eng);
-  assert(p.mode === 'work' && p.rec.weight > 50, JSON.stringify(p));
+  assert(p.mode === 'cal-done');
+  const prog = ui.dayProgress({ items: [item()] }, cals);
+  assert(prog.done === 0, 'прикидки не должны считаться рабочими');
 });
-t('landedInRange: в диапазоне при RIR ≤ цель+1 — попал; вне — нет', () => {
-  const it = item();   // 8–12 повторов
-  assert(ui.landedInRange({ reps: 10, rir: 2 }, it, 2) === true);
-  assert(ui.landedInRange({ reps: 10, rir: 3 }, it, 2) === true);    // цель+1
-  assert(ui.landedInRange({ reps: 10, rir: 4 }, it, 2) === false);   // слишком легко
-  assert(ui.landedInRange({ reps: 14, rir: 2 }, it, 2) === false);   // выше диапазона
-  assert(ui.landedInRange({ reps: 6, rir: 1 }, it, 2) === false);    // ниже диапазона
+t('skipCalibration → сразу mode work с ручным весом', () => {
+  const p = ui.planExercise(item(), [], ctx(1), eng, { skipCalibration: true });
+  assert(p.mode === 'work' && p.skipped === true && p.rec.weight === null, JSON.stringify(p));
+});
+t('след. тренировка после лесенки → mode work, вес из калибровки', () => {
+  // история: прошлая сессия целиком из прикидок (лучший e1RM у 40×8@2 → 53.3)
+  const history = [{ isDeload: false, sets: [
+    S(30, 15, 4, { isCalibration: true }), S(35, 12, 3, { isCalibration: true }), S(40, 8, 2, { isCalibration: true }),
+  ] }];
+  const p = ui.planExercise(item(), [], ctx(1), eng, {});
+  const p2 = ui.planExercise(item(), [], { ...ctx(1), history }, eng, {});
+  assert(p.mode === 'probe', 'без истории — прикидка');
+  assert(p2.mode === 'work' && p2.rec.weight > 0 && !p2.rec.needsCalibration, JSON.stringify(p2.rec));
+  assert(/калибровк/i.test(p2.rec.reason), p2.rec.reason);
 });
 
 console.log('— planExercise: обычный сценарий (есть история) —');

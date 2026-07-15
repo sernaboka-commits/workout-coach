@@ -135,10 +135,28 @@ t('делоуд → 60% рабочего веса', () => {
   assert(r.isDeload === true && r.weight === 60 && r.targetRIR === 4, JSON.stringify(r));
 });
 
-console.log('— recommend: калибровочные сеты игнорируются —');
-t('сессия только с калибровочным сетом → needsCalibration', () => {
-  const history = [sess([S(40, 15, 4, { isCalibration: true })])];
+console.log('— weightFromLadder: рабочий вес из калибровочной лесенки —');
+t('лучший e1RM лесенки → проекция на целевые повторы/RIR', () => {
+  // 30×15@4 (e1RM 49), 35×12@3 (52.5), 40×8@2 (53.3) → лучший 53.3
+  const ladder = [S(30, 15, 4), S(35, 12, 3), S(40, 8, 2)];
+  const w = eng.weightFromLadder(ladder, { targetReps: 10, targetRIR: 3, weightStep: 2.5 });
+  assert(Math.abs(w.e1rm - 53.3) < 0.1, 'e1rm=' + w.e1rm);
+  assert(w.weight === 37.5, 'weight=' + w.weight);   // 53.3/(1+13/30)=37.2 → 37.5
+});
+t('пустая лесенка (или нулевые веса) → null', () => {
+  assert(eng.weightFromLadder([], { targetReps: 10 }) === null);
+  assert(eng.weightFromLadder([S(0, 12, 3)], { targetReps: 10 }) === null);
+});
+
+console.log('— recommend: рабочий вес из калибровочной истории —');
+t('история только из прикидок → вес из лесенки, не needsCalibration', () => {
+  const history = [sess([S(30, 15, 4, { isCalibration: true }), S(40, 8, 2, { isCalibration: true })])];
   const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(1)), item: item(), exercise: ex, history });
+  assert(r.needsCalibration === false && r.weight > 0, JSON.stringify(r));
+  assert(/калибровк/i.test(r.reason), r.reason);
+});
+t('истории нет вообще → needsCalibration', () => {
+  const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(1)), item: item(), exercise: ex, history: [] });
   assert(r.needsCalibration === true, JSON.stringify(r));
 });
 

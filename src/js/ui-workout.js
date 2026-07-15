@@ -48,33 +48,30 @@ function _hint(id) {
   return (typeof hintBtn === 'function') ? hintBtn(id) : '';
 }
 
-/** Попал ли подход в рабочий диапазон с усилием около целевого:
- *  повторы в диапазоне и RIR не больше целевого+1. Такой прикидочный
- *  подход сразу засчитывается рабочим — вес найден. */
-function landedInRange(set, item, targetRIR) {
-  return Number(set.reps) >= item.repRangeMin && Number(set.reps) <= item.repRangeMax &&
-    set.rir != null && Number(set.rir) <= Number(targetRIR) + 1;
-}
-
-/** Пошаговое пояснение подбора веса (чистая функция).
+/** Пошаговое пояснение калибровочной тренировки (чистая функция).
  *  → { step, title, text } | null */
-function calibrationGuide(plan, item, targetRIR) {
+function calibrationGuide(plan, item) {
   if (!plan || !item) return null;
-  const range = `${item.repRangeMin}–${item.repRangeMax}`;
-  const landRule = `Попадёшь в ${range} повторов с запасом RIR ≤ ${Number(targetRIR) + 1} — вес найден, подход сразу засчитается рабочим.`;
   if (plan.mode === 'probe') {
     return {
       step: '1',
-      title: 'Прикидка — подбираем вес',
-      text: `Новое упражнение: рабочий вес пока неизвестен. Возьми заведомо посильный вес, сделай подход и остановись С ЗАПАСОМ, не до отказа. Запиши вес, повторы и RIR. ${landRule} Если было слишком легко — добавим вес и прикинем ещё раз.`,
+      title: 'Калибровочная тренировка',
+      text: `Новое упражнение — сегодня подбираем вес лесенкой. Поставь посильный вес и сделай подход, останавливаясь С ЗАПАСОМ (не до отказа): дальше нет смысла, вес и так ясен. Запиши вес, повторы и RIR. Было легко — добавим вес и повторим; так за несколько подходов спустимся до ~${item.repRangeMin} повторов. Знаешь свой рабочий вес? Пропусти подбор кнопкой ниже.`,
     };
   }
   if (plan.mode === 'ramp') {
-    const w = plan.rec && plan.rec.weight != null ? `: ${plan.rec.weight} кг` : '';
+    const w = plan.rec && plan.rec.weight != null ? ` до ${plan.rec.weight} кг` : '';
     return {
       step: String((plan.calNo || 1) + 1),
-      title: 'Добор веса',
-      text: `Прошлый подход был с большим запасом. Расчётный вес${w} — сделай с ним подход, снова не до отказа. ${landRule} Если опять легко — добавим ещё (до отказа прикидки не доводим: техника в новом движении важнее).`,
+      title: 'Лесенка — добавляем вес',
+      text: `Добавь${w} и сделай следующий подход, снова с запасом, не до отказа. Когда дойдёшь до ~${item.repRangeMin} повторов — лесенка закончится, и по всем прикидкам рассчитается твой рабочий вес на следующую тренировку.`,
+    };
+  }
+  if (plan.mode === 'cal-done') {
+    return {
+      step: '✓',
+      title: 'Вес подобран',
+      text: `Готово: по лесенке из ${plan.calCount} прикидок рассчитан рабочий вес — ${plan.workWeight} кг. В следующую тренировку начнёшь с него, и пойдут обычные рекомендации. Сегодня к этому упражнению можно не возвращаться.`,
     };
   }
   return null;
@@ -150,15 +147,20 @@ function dayProgress(day, sessionSets) {
 /**
  * Что показывать по упражнению сейчас (чистая функция).
  * exSets — сеты этого упражнения в текущей сессии (по порядку добавления).
- * ctx — как для recommend: { meso, item, exercise, history }.
- * engine — { recommend, calibrate }.
- * → { mode: 'probe'|'control'|'work'|'done', rec?, calibration?, done? }
+ * ctx — как для recommend: { meso, item, exercise, history } (история
+ *       С калибровочными сетами; текущая сессия из неё исключается тут).
+ * engine — { recommend, calibrate, weightFromLadder }.
+ * opts.skipCalibration — пользователь знает рабочий вес, лесенку не делаем.
+ * → { mode: 'probe'|'ramp'|'cal-done'|'work'|'done', rec?, ... }
  */
-function planExercise(item, exSets, ctx, engine) {
+function planExercise(item, exSets, ctx, engine, opts = {}) {
   const work = exSets.filter((s) => !s.isCalibration);
-  const hasHistory = (ctx.history || []).some(
-    (h) => !h.isDeload && h.sets.some((s) => !s.isCalibration)
+  // история без текущей сессии (её сеты пришли и в exSets)
+  const prior = (ctx.history || []).filter(
+    (h) => !h.sets.some((s) => exSets.some((x) => x.id === s.id))
   );
+  const hasWorkHistory = prior.some((h) => !h.isDeload && h.sets.some((s) => !s.isCalibration));
+  const hasCalHistory = prior.some((h) => !h.isDeload && h.sets.some((s) => s.isCalibration));
 
   if (work.length >= item.workSets) return { mode: 'done', done: work.length };
 
@@ -168,13 +170,20 @@ function planExercise(item, exSets, ctx, engine) {
     return { mode: 'work', rec: engine.recommend(item.exerciseId, work.length + 1, ctx) };
   }
 
-  // подбор веса добором: истории нет — прикидка → добор → посадка в диапазон.
-  // Подход, попавший в диапазон при усилии около целевого (landedInRange),
-  // логируется как РАБОЧИЙ — тогда work.length > 0 и добор завершается.
-  if (!hasHistory && !ctx.meso.isDeload) {
-    if (work.length > 0) {
-      // вес найден — обычные рабочие подходы от последнего рабочего
-      return { mode: 'work', rec: nextSetRec(work[work.length - 1], ctx, item, engine) };
+  // калибровочная тренировка: истории нет вовсе — вся первая тренировка
+  // упражнения = лесенка прикидок (все сеты калибровочные); рабочий вес
+  // считается по лучшему e1RM лесенки и применяется со СЛЕДУЮЩЕЙ тренировки
+  if (!hasWorkHistory && !hasCalHistory && !ctx.meso.isDeload && work.length === 0) {
+    const mid = Math.round((item.repRangeMin + item.repRangeMax) / 2);
+    if (opts.skipCalibration) {
+      return {
+        mode: 'work',
+        skipped: true,
+        rec: {
+          weight: null, reps: mid, targetRIR: ctx.meso.targetRIR,
+          reason: `Подбор пропущен — выставь свой рабочий вес, цель ${item.repRangeMin}–${item.repRangeMax} повт при RIR ${ctx.meso.targetRIR}.`,
+        },
+      };
     }
     const cals = exSets.filter((s) => s.isCalibration);
     if (!cals.length) {
@@ -182,35 +191,36 @@ function planExercise(item, exSets, ctx, engine) {
         mode: 'probe',
         rec: {
           weight: null,
-          reps: Math.round((item.repRangeMin + item.repRangeMax) / 2),
-          targetRIR: 4,
-          reason: 'Прикидочный подход: посильный вес, НЕ до отказа.',
+          reps: mid + 3,
+          targetRIR: 3,
+          reason: 'Первая прикидка: посильный вес, НЕ до отказа.',
         },
       };
     }
-    const target = Math.round((item.repRangeMin + item.repRangeMax) / 2);
     const last = cals[cals.length - 1];
+    const ladderCap = Math.min(5, Math.max(3, item.workSets + 1));
+    if (Number(last.reps) <= item.repRangeMin || cals.length >= ladderCap) {
+      // лесенка спустилась к низу диапазона (или лимит) — вес подобран
+      const wl = engine.weightFromLadder(cals, {
+        targetReps: mid, targetRIR: ctx.meso.targetRIR, weightStep: ctx.exercise.weightStep,
+      });
+      return { mode: 'cal-done', calCount: cals.length, workWeight: wl ? wl.weight : null };
+    }
+    // следующая ступень: вес под «на ~3 повтора меньше», по-прежнему с запасом
     const cal = engine.calibrate(last, {
-      targetReps: target,
-      targetRIR: ctx.meso.targetRIR,
+      targetReps: Math.max(item.repRangeMin, Number(last.reps) - 3),
+      targetRIR: 2,
       weightStep: ctx.exercise.weightStep,
     });
-    if (cals.length >= 3) {
-      // 3 прикидки не сели в диапазон — не тратим силы, расчётный вес рабочий
-      return {
-        mode: 'work',
-        rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: 'Прикидки закончились — расчётный вес считаем рабочим. ' + cal.reason },
-      };
-    }
     return {
       mode: 'ramp',
       calNo: cals.length,
       calibration: cal,
-      rec: { weight: cal.weight, reps: target, targetRIR: ctx.meso.targetRIR, reason: cal.reason },
+      rec: { weight: cal.weight, reps: cal.targetReps, targetRIR: 2, reason: cal.reason },
     };
   }
 
-  // обычная рекомендация
+  // обычная рекомендация (в т.ч. рабочий вес из калибровочной лесенки)
   const rec = engine.recommend(item.exerciseId, work.length + 1, ctx);
   if (work.length > 0) {
     // следующий сет этой сессии: тот же вес, повторы пересчитаны от факта прошлого сета
@@ -242,7 +252,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, mesoStatus, context, projectReps, nextSessionAdvice };
+  const E = opts.engine || { recommend, calibrate, weightFromLadder, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -260,6 +270,7 @@ function initWorkout(root, opts = {}) {
 
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
+  const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
   let timer = null;        // { endTs, restSec, handle }
   let showSummary = false; // оверлей итога тренировки
 
@@ -299,7 +310,8 @@ function initWorkout(root, opts = {}) {
     return E.context(state, item.exerciseId, item, S.exerciseHistory);
   }
   function planFor(item) {
-    return planExercise(item, exSets(item.exerciseId), ctxFor(item), E);
+    return planExercise(item, exSets(item.exerciseId), ctxFor(item), E,
+      { skipCalibration: !!skipCal[item.exerciseId] });
   }
   function ensureDraft(item, plan) {
     const id = item.exerciseId;
@@ -343,8 +355,8 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
       const plan = planFor(item);
       const logged = exSets(item.exerciseId);
-      const badge = plan.mode === 'probe' ? '<span class="badge cal">подбор веса</span>'
-        : plan.mode === 'ramp' ? '<span class="badge cal">добор веса</span>'
+      const badge = plan.mode === 'probe' || plan.mode === 'ramp' ? '<span class="badge cal">калибровка</span>'
+        : plan.mode === 'cal-done' ? '<span class="badge ok">вес подобран</span>'
         : plan.mode === 'done' ? '<span class="badge ok">готово</span>' : '';
 
       let workNo = 0;
@@ -363,7 +375,15 @@ function initWorkout(root, opts = {}) {
         : '';
 
       let active = '';
-      if (plan.mode !== 'done') {
+      if (plan.mode === 'cal-done') {
+        // лесенка завершена: показываем итог, без формы ввода
+        const guide = calibrationGuide(plan, item);
+        active = `
+          <div class="cal-guide">
+            <b>Подбор веса · ${guide.title} ${_hint('calibration')}</b>
+            <div>${guide.text}</div>
+          </div>`;
+      } else if (plan.mode !== 'done') {
         const d = ensureDraft(item, plan);
         const bw = !!ex.bodyweight;
         const recVals = plan.rec && plan.rec.reps != null
@@ -374,12 +394,16 @@ function initWorkout(root, opts = {}) {
         const weightField = bw
           ? `<div class="bw-note">Собственный вес — прогрессия по повторам и RIR</div>`
           : entryField(item.exerciseId, 'weight', 'Вес, кг', d.weight, 'w', ex.weightStep || 2.5, 'decimal', 0, null);
-        // пошаговое пояснение подбора веса; текст reason тогда не дублируем
-        const guide = calibrationGuide(plan, item, meso.targetRIR);
+        // пошаговое пояснение калибровки; текст reason тогда не дублируем
+        const guide = calibrationGuide(plan, item);
+        const skipBtn = (plan.mode === 'probe')
+          ? `<button class="btn ghost sm cal-skip" data-act="skip-cal" data-ex="${item.exerciseId}">Знаю рабочий вес — пропустить подбор</button>`
+          : '';
         const guideHtml = guide ? `
           <div class="cal-guide">
             <b>Подбор веса · шаг ${guide.step} — ${guide.title} ${_hint('calibration')}</b>
             <div>${guide.text}</div>
+            ${skipBtn}
           </div>` : '';
         active = `
           ${guideHtml}
@@ -429,7 +453,7 @@ function initWorkout(root, opts = {}) {
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
       const advHtml = adv
         ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
-        : (e.calib ? '<div class="sum-advice lv-hold">След. раз: рабочие подходы → пойдут рекомендации</div>' : '');
+        : (e.calib ? '<div class="sum-advice lv-hold">Калибровка завершена — рабочий вес рассчитан, увидишь его в следующей тренировке</div>' : '');
       const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
         <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${top}</small></div>
@@ -515,6 +539,7 @@ function initWorkout(root, opts = {}) {
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }
     if (act === 'rest-skip') { stopRest(); return; }
     if (act === 'undo') { removeSet(btn.dataset.set); return; }
+    if (act === 'skip-cal') { skipCal[exId] = true; delete drafts[exId]; render(); return; }
 
     const item = day.items.find((i) => i.exerciseId === exId);
     if (!item) return;
@@ -560,9 +585,9 @@ function initWorkout(root, opts = {}) {
   function logCurrent(item, d) {
     ensureSession();
     const setNo = exSets(item.exerciseId).length + 1;
-    // прикидка, попавшая в диапазон при усилии около целевого, — уже
-    // рабочий подход: вес найден, добор на этом завершается
-    const isCal = (d.mode === 'probe' || d.mode === 'ramp') && !landedInRange(d, item, meso.targetRIR);
+    // калибровочная тренировка: ВСЕ прикидки лесенки — калибровочные,
+    // рабочий вес по ним применится со следующей тренировки
+    const isCal = d.mode === 'probe' || d.mode === 'ramp';
     const res = S.logSet(state, session.id, {
       exerciseId: item.exerciseId,
       setNo,
@@ -644,6 +669,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, landedInRange,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
   };
 }

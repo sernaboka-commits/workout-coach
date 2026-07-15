@@ -68,10 +68,13 @@ function calibrationGuide(plan, item) {
     };
   }
   if (plan.mode === 'cal-done') {
+    const ref = plan.refSet
+      ? ` (опора — прикидка ${plan.refSet.weight}×${plan.refSet.reps}${plan.refSet.rir != null ? ' RIR ' + plan.refSet.rir : ''}; слишком тяжёлые ступени ограничивают вес сверху)`
+      : '';
     return {
       step: '✓',
       title: 'Вес подобран',
-      text: `Готово: по лесенке из ${plan.calCount} прикидок рассчитан рабочий вес — ${plan.workWeight} кг. В следующую тренировку начнёшь с него, и пойдут обычные рекомендации. Сегодня к этому упражнению можно не возвращаться.`,
+      text: `Готово: по лесенке из ${plan.calCount} прикидок рассчитан рабочий вес — ${plan.workWeight} кг${ref}. В следующую тренировку начнёшь с него, и пойдут обычные рекомендации. Сегодня к этому упражнению можно не возвращаться.`,
     };
   }
   return null;
@@ -202,9 +205,10 @@ function planExercise(item, exSets, ctx, engine, opts = {}) {
     if (Number(last.reps) <= item.repRangeMin || cals.length >= ladderCap) {
       // лесенка спустилась к низу диапазона (или лимит) — вес подобран
       const wl = engine.weightFromLadder(cals, {
-        targetReps: mid, targetRIR: ctx.meso.targetRIR, weightStep: ctx.exercise.weightStep,
+        repRangeMin: item.repRangeMin, repRangeMax: item.repRangeMax,
+        targetRIR: ctx.meso.targetRIR, weightStep: ctx.exercise.weightStep,
       });
-      return { mode: 'cal-done', calCount: cals.length, workWeight: wl ? wl.weight : null };
+      return { mode: 'cal-done', calCount: cals.length, workWeight: wl ? wl.weight : null, refSet: wl ? wl.refSet : null };
     }
     // следующая ступень: вес под «на ~3 повтора меньше», по-прежнему с запасом
     const cal = engine.calibrate(last, {

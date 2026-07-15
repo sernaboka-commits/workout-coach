@@ -136,16 +136,30 @@ t('делоуд → 60% рабочего веса', () => {
 });
 
 console.log('— weightFromLadder: рабочий вес из калибровочной лесенки —');
-t('лучший e1RM лесенки → проекция на целевые повторы/RIR', () => {
-  // 30×15@4 (e1RM 49), 35×12@3 (52.5), 40×8@2 (53.3) → лучший 53.3
+t('опора — самая тяжёлая прикидка в диапазоне, проекция на середину', () => {
+  // диапазон 8–12: опора 40×8@2 (rtf 10, e1RM 53.3) → 53.3/(1+13/30)=37.2 → 37.5
   const ladder = [S(30, 15, 4), S(35, 12, 3), S(40, 8, 2)];
-  const w = eng.weightFromLadder(ladder, { targetReps: 10, targetRIR: 3, weightStep: 2.5 });
+  const w = eng.weightFromLadder(ladder, { repRangeMin: 8, repRangeMax: 12, targetRIR: 3, weightStep: 2.5 });
+  assert(w.refSet.weight === 40, 'ref=' + JSON.stringify(w.refSet));
   assert(Math.abs(w.e1rm - 53.3) < 0.1, 'e1rm=' + w.e1rm);
-  assert(w.weight === 37.5, 'weight=' + w.weight);   // 53.3/(1+13/30)=37.2 → 37.5
+  assert(w.weight === 37.5, 'weight=' + w.weight);
+});
+t('регрессия из зала: 28×15@0, 28×13@0, 28×10@2, 30×5@0 → 28, не 30', () => {
+  // диапазон 6–10: свежая 28×15 завышает e1RM, но 30×5 еле-еле — прямая
+  // улика, что рабочий вес ниже 30; опора 28×10@2 → 28 кг
+  const ladder = [S(28, 15, 0), S(28, 13, 0), S(28, 10, 2), S(30, 5, 0)];
+  const w = eng.weightFromLadder(ladder, { repRangeMin: 6, repRangeMax: 10, targetRIR: 3, weightStep: 2 });
+  assert(w.weight === 28, 'weight=' + w.weight);
+  assert(w.refSet.weight === 28 && w.refSet.reps === 10, 'ref=' + JSON.stringify(w.refSet));
+});
+t('слишком тяжёлая ступень режет вес сверху даже без опоры в диапазоне', () => {
+  // единственная прикидка 50×4@0 (диапазон 8–12) → проекция вниз, ниже 50
+  const w = eng.weightFromLadder([S(50, 4, 0)], { repRangeMin: 8, repRangeMax: 12, targetRIR: 2, weightStep: 2.5 });
+  assert(w.weight < 50 && w.weight > 0, 'weight=' + w.weight);
 });
 t('пустая лесенка (или нулевые веса) → null', () => {
-  assert(eng.weightFromLadder([], { targetReps: 10 }) === null);
-  assert(eng.weightFromLadder([S(0, 12, 3)], { targetReps: 10 }) === null);
+  assert(eng.weightFromLadder([], { repRangeMin: 8, repRangeMax: 12 }) === null);
+  assert(eng.weightFromLadder([S(0, 12, 3)], { repRangeMin: 8, repRangeMax: 12 }) === null);
 });
 
 console.log('— recommend: рабочий вес из калибровочной истории —');

@@ -224,22 +224,46 @@ function calibrate(probeSet, ctx) {
 }
 
 /**
- * Рабочий вес из калибровочной лесенки: лучший e1RM среди прикидок →
- * проекция на целевые повторы/RIR.
+ * Рабочий вес из калибровочной лесенки.
+ * Правила (важно: прямые улики сильнее формулы):
+ *  1) опора — самая тяжёлая прикидка, севшая в диапазон повторов; при
+ *     равном весе — та, чьи «повторы до отказа» ближе к целевым (Эпли
+ *     на дальней экстраполяции от многоповторных сетов завышает);
+ *  2) любая более тяжёлая прикидка, не дотянувшая даже до низа диапазона
+ *     при целевом RIR, ограничивает рабочий вес сверху (вес − шаг) —
+ *     «сделал 30×5 еле-еле» значит рабочий строго меньше 30.
  * calSets: [{ weight, reps, rir }] — прикидки (не до отказа).
- * → { weight, e1rm, targetReps, targetRIR } | null
+ * → { weight, e1rm, refSet, targetReps, targetRIR } | null
  */
-function weightFromLadder(calSets, { targetReps, targetRIR = 2, weightStep = 2.5 } = {}) {
+function weightFromLadder(calSets, { repRangeMin, repRangeMax, targetRIR = 2, weightStep = 2.5 } = {}) {
   const sets = (calSets || []).filter((s) => Number(s.weight) > 0 && Number(s.reps) > 0);
   if (!sets.length) return null;
-  let best = 0;
+  const mid = Math.round((repRangeMin + repRangeMax) / 2);
+  const need = mid + targetRIR;                 // повторы до отказа рабочего веса
+  const minNeed = repRangeMin + targetRIR;      // ниже — вес явно тяжёлый
+  const rtf = (s) => Number(s.reps) + (s.rir == null ? 0 : Number(s.rir));
+
+  const inRange = sets.filter((s) => Number(s.reps) >= repRangeMin);
+  const pool = inRange.length ? inRange : sets;
+  const ref = pool.reduce((a, s) => {
+    if (!a) return s;
+    if (Number(s.weight) !== Number(a.weight)) return Number(s.weight) > Number(a.weight) ? s : a;
+    return Math.abs(rtf(s) - need) < Math.abs(rtf(a) - need) ? s : a;
+  }, null);
+
+  const e1rm = epley1rm(Number(ref.weight), rtf(ref));
+  let weight = e1rm / (1 + need / 30);
   for (const s of sets) {
-    const rtf = Number(s.reps) + (s.rir == null ? 0 : Number(s.rir));
-    const v = epley1rm(Number(s.weight), rtf);
-    if (v > best) best = v;
+    if (rtf(s) < minNeed) weight = Math.min(weight, Number(s.weight) - weightStep);
   }
-  const weight = roundToStep(best / (1 + (targetReps + targetRIR) / 30), weightStep);
-  return { weight, e1rm: +best.toFixed(1), targetReps, targetRIR };
+  weight = Math.max(weightStep, roundToStep(weight, weightStep));
+  return {
+    weight,
+    e1rm: +e1rm.toFixed(1),
+    refSet: { weight: Number(ref.weight), reps: Number(ref.reps), rir: ref.rir == null ? null : Number(ref.rir) },
+    targetReps: mid,
+    targetRIR,
+  };
 }
 
 /* ---------- рекомендация на подход ---------- */
@@ -289,13 +313,15 @@ function recommend(exerciseId, setNo, ctx) {
       (h) => !h.isDeload && h.sets.some((s) => s.isCalibration)
     );
     const ladder = calSess.length ? calSess[0].sets.filter((s) => s.isCalibration) : [];
-    const mid = Math.round((item.repRangeMin + item.repRangeMax) / 2);
-    const wl = weightFromLadder(ladder, { targetReps: mid, targetRIR, weightStep: step });
+    const wl = weightFromLadder(ladder, {
+      repRangeMin: item.repRangeMin, repRangeMax: item.repRangeMax, targetRIR, weightStep: step,
+    });
     if (wl) {
+      const refTxt = `${wl.refSet.weight}×${wl.refSet.reps}${wl.refSet.rir != null ? ' RIR ' + wl.refSet.rir : ''}`;
       return {
-        weight: wl.weight, reps: mid, targetRIR,
+        weight: wl.weight, reps: wl.targetReps, targetRIR,
         isDeload: meso.isDeload, needsCalibration: false, lastResult: null,
-        reason: `Рабочий вес из калибровки (e1RM≈${wl.e1rm} кг): ${wl.weight} кг под ${mid}×RIR${targetRIR}.`,
+        reason: `Рабочий вес из калибровки (опора: ${refTxt}): ${wl.weight} кг под ${wl.targetReps}×RIR${targetRIR}.`,
       };
     }
     return {

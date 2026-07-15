@@ -3,7 +3,7 @@
  * Приложение целиком в index.html (CSS/JS инлайнятся сборкой),
  * поэтому кешируем только корень, манифест и иконки.
  * Версию бампать при изменениях, чтобы старый кеш вычищался. */
-const CACHE = 'workout-coach-v15';
+const CACHE = 'workout-coach-v16';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

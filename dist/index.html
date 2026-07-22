@@ -627,8 +627,12 @@ const HELP_TERMS = {
     short: 'Два рычага роста по очереди: сначала добавляешь ПОВТОРЫ в заданном диапазоне (например 8–12), а когда все рабочие подходы дошли до потолка диапазона — добавляется ВЕС, и повторы возвращаются к нижней границе. Простое правило, которое надёжно двигает нагрузку вверх.',
   },
   'effective-sets': {
-    title: 'Эффективные сеты по мышцам',
+    title: 'Эффективные подходы по мышцам',
     short: 'Каждый подход засчитывается мышцам ДОЛЯМИ: целевой — 1.0, сильному помощнику — 0.5, второстепенному — 0.25 (методика «дробных сетов» Renaissance Periodization). Пример: подход жима лёжа = 1.0 середине груди + 0.5 передней дельте + 0.5 трицепсу. Так видно реальную недельную нагрузку каждой мышцы, включая скрытую работу в базовых движениях.',
+  },
+  'program-item': {
+    title: 'Как читать строку упражнения',
+    short: '«Повторы от/до» — рабочий диапазон двойной прогрессии: начинаешь у нижней границы, от тренировки к тренировке добавляешь повторы; когда ВСЕ подходы дошли до верхней — прибавляется вес и повторы возвращаются к нижней. «Подходы» — сколько рабочих подходов делать (то же, что «сеты»). «RIR (запас)» — за сколько повторов до отказа останавливаться; цель по неделям задаёт мезоцикл. «Отдых, с» — пауза между подходами, её отсчитает таймер. А вес нигде не задаётся: его подберёт калибровочная тренировка, дальше приложение рекомендует само на экране «Зал».',
   },
   tonnage: {
     title: 'Тоннаж',
@@ -660,6 +664,11 @@ const HELP_TOPICS = [
     id: 'calibration',
     title: 'Калибровочная тренировка: первый раз в новом упражнении',
     body: 'Первая тренировка нового упражнения целиком уходит на подбор веса лесенкой — как это реально делают в зале. Ставишь посильный вес, делаешь подход и останавливаешься с запасом, не до отказа (сделал 15 и легко — дальше нет смысла). Приложение рассчитывает добавку по формуле Эпли и предлагает следующую прикидку: например, 15 повторов → добавили → 12 → добавили → 10 → добавили → 8. Когда повторы спустились к низу твоего рабочего диапазона (или прикидок уже достаточно), лесенка завершается. Рабочий вес считается по опорной прикидке — самой тяжёлой из севших в диапазон, а ступень, которая оказалась не по силам (еле сделал меньше низа диапазона), ограничивает вес сверху: если 30 кг пошли еле-еле на 5, рабочий будет ниже 30. Со следующей тренировки идут обычные рабочие подходы с рекомендациями. Важно: прикидки НЕ доводятся до отказа — в новом движении техника сырая, а вес и так вычисляется по повторам с запасом. Все прикидки помечаются «кал.» и не портят графики прогресса. Если упражнение знакомо и рабочий вес известен — нажми «Знаю рабочий вес — пропустить подбор» и работай сразу.',
+  },
+  {
+    id: 'program',
+    title: 'Как читать программу',
+    body: 'У каждого упражнения в дне пять настроек. «Повторы от/до» — рабочий диапазон двойной прогрессии: сначала растут повторы от нижней границы к верхней, когда все подходы дошли до потолка — прибавляется вес, и повторы возвращаются к низу. «Подходы» — число рабочих подходов (то же самое, что «сеты»). «RIR (запас)» — за сколько повторов до отказа останавливаться; фактическую цель по неделям ведёт мезоцикл. «Отдых, с» — пауза между подходами, таймер отсчитает сам. Веса в программе нет — рабочий вес подберёт калибровочная тренировка (лесенка прикидок), дальше приложение рекомендует его само. Всё можно править: стрелки меняют порядок, «⇄» заменяет упражнение аналогом на ту же группу мышц, чипы дней недели привязывают день программы к календарю.',
   },
   {
     id: 'meso',
@@ -2362,7 +2371,7 @@ function generateProgram(opts, library) {
     return { key, label, items, estMinutes: Math.round(genEstimateMin(items)) };
   });
 
-  const note = `${g.label}: ${g.hint}. Объём ~10–20 сетов/группу в неделю, каждая группа ≥2×/нед, `
+  const note = `${g.label}: ${g.hint}. Объём ~10–20 подходов/группу в неделю, каждая группа ≥2×/нед, `
     + `приоритет упражнениям в растянутой позиции (данные 2025–2026). `
     + (sex === 'f' ? 'Акцент: ноги/ягодичные/дельты.' : 'Акцент: грудь/спина/руки.');
 
@@ -2802,7 +2811,7 @@ function initWorkout(root, opts = {}) {
         <section class="ex-card${plan.mode === 'done' ? ' complete' : ''}">
           <div class="ex-head">
             <div class="ex-name">${ex.name} ${badge}</div>
-            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} сетов · отдых ${fmtClock(item.restSec)}
+            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} подх. · отдых ${fmtClock(item.restSec)}
               · <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬 видео</a></div>
           </div>
           ${prevLine}
@@ -3125,6 +3134,7 @@ function initProgram(root, opts = {}) {
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
   const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
+  const hint = (id) => (typeof hintBtn === 'function' ? hintBtn(id) : '');
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib());
@@ -3152,6 +3162,7 @@ function initProgram(root, opts = {}) {
           </div>
         </div>
         ${daysHtml}
+        <div class="meso-hint">Веса в программе нет: рабочий вес приложение подберёт калибровочной тренировкой (лесенка прикидок) и дальше будет рекомендовать само на экране «Зал».</div>
       </div>
       ${picker ? pickerHtml() : ''}`;
   }
@@ -3201,7 +3212,7 @@ function initProgram(root, opts = {}) {
           <button class="btn ghost" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать пустую</button>
         </div>
         <div class="meso-hint">Подбор — по принципам доказательного тренинга (Schoenfeld, Israetel/RP, Helms):
-        10–20 сетов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
+        10–20 подходов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
         приоритет упражнениям с растянутой позицией. Всё можно править после создания.</div>
       </section>`;
   }
@@ -3212,7 +3223,7 @@ function initProgram(root, opts = {}) {
       return `
         <div class="prog-item" data-day="${d.id}" data-idx="${i}">
           <div class="pi-top">
-            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a></div>
+            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a> ${hint('program-item')}</div>
             <div class="pi-ord">
               <button class="mini" data-act="swap-item" data-day="${d.id}" data-idx="${i}" title="Заменить аналогом">⇄</button>
               <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
@@ -3221,10 +3232,10 @@ function initProgram(root, opts = {}) {
             </div>
           </div>
           <div class="pi-params">
-            ${miniStep(d.id, i, 'repRangeMin', it.repRangeMin, 'повт min')}
-            ${miniStep(d.id, i, 'repRangeMax', it.repRangeMax, 'повт max')}
-            ${miniStep(d.id, i, 'workSets', it.workSets, 'сеты')}
-            ${miniStep(d.id, i, 'targetRIR', it.targetRIR, 'RIR')}
+            ${miniStep(d.id, i, 'repRangeMin', it.repRangeMin, 'повторы от')}
+            ${miniStep(d.id, i, 'repRangeMax', it.repRangeMax, 'повторы до')}
+            ${miniStep(d.id, i, 'workSets', it.workSets, 'подходы')}
+            ${miniStep(d.id, i, 'targetRIR', it.targetRIR, 'RIR (запас)')}
             ${miniStep(d.id, i, 'restSec', it.restSec, 'отдых, с')}
           </div>
         </div>`;
@@ -3669,14 +3680,14 @@ function initAnalytics(root, opts = {}) {
     const maxSets = Math.max(1, ...ml.groups.flatMap((g) => g.muscles.map((m) => m.sets)));
     const body = ml.groups.length
       ? ml.groups.map((g) => `
-          <div class="ml-group"><b>${muscleLabels[g.group] || g.group}</b><small>${g.sets} сет · ${fmtTon(g.tonnage)}</small></div>
+          <div class="ml-group"><b>${muscleLabels[g.group] || g.group}</b><small>${g.sets} подх · ${fmtTon(g.tonnage)}</small></div>
           ${g.muscles.map((m) => `
             <div class="ml-row">
               <span class="ml-name">${(detailMuscles[m.muscle] || { label: m.muscle }).label}</span>
               <span class="ml-bar"><i style="width:${Math.round((m.sets / maxSets) * 100)}%"></i></span>
               <span class="ml-val">${m.sets} · ${fmtTon(m.tonnage)}</span>
             </div>`).join('')}`).join('')
-      : '<div class="pi-empty">На этой неделе рабочих сетов нет.</div>';
+      : '<div class="pi-empty">На этой неделе рабочих подходов нет.</div>';
     return `
       <section class="an-card">
         <div class="an-head">
@@ -3688,7 +3699,7 @@ function initAnalytics(root, opts = {}) {
           </div>
         </div>
         ${body}
-        <div class="ml-note">Эффективные сеты с учётом вторичных мышц: целевая 1.0 · синергист 0.5 · второстепенная 0.25. Тоннаж = вес × повторы × доля (свой вес тела не учитывается).</div>
+        <div class="ml-note">Эффективные подходы с учётом вторичных мышц: целевая 1.0 · синергист 0.5 · второстепенная 0.25. Тоннаж = вес × повторы × доля (свой вес тела не учитывается).</div>
       </section>`;
   }
 
@@ -3714,7 +3725,7 @@ function initAnalytics(root, opts = {}) {
         </section>
 
         <section class="an-card">
-          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
+          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>подходы · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
           <canvas id="an-vol" class="chart"></canvas>
         </section>
 
@@ -4411,7 +4422,7 @@ function initApp() {
     box.className = 'hint-pop';
     box._src = q;
     box.innerHTML = `<b>${t.title}</b><div>${t.short}</div>`;
-    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line') || q.parentElement;
+    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line, .pi-top') || q.parentElement;
     anchor.insertAdjacentElement('afterend', box);
   });
 

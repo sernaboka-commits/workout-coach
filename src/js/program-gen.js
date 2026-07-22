@@ -162,7 +162,7 @@ function generateProgram(opts, library) {
     return { key, label, items, estMinutes: Math.round(genEstimateMin(items)) };
   });
 
-  const note = `${g.label}: ${g.hint}. Объём ~10–20 сетов/группу в неделю, каждая группа ≥2×/нед, `
+  const note = `${g.label}: ${g.hint}. Объём ~10–20 подходов/группу в неделю, каждая группа ≥2×/нед, `
     + `приоритет упражнениям в растянутой позиции (данные 2025–2026). `
     + (sex === 'f' ? 'Акцент: ноги/ягодичные/дельты.' : 'Акцент: грудь/спина/руки.');
 

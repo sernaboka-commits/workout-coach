@@ -195,7 +195,7 @@ function initApp() {
     box.className = 'hint-pop';
     box._src = q;
     box.innerHTML = `<b>${t.title}</b><div>${t.short}</div>`;
-    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line') || q.parentElement;
+    const anchor = q.closest('.an-head, .wk-head, .ex-head, .rec-line, .pi-top') || q.parentElement;
     anchor.insertAdjacentElement('afterend', box);
   });
 

@@ -66,6 +66,7 @@ function initProgram(root, opts = {}) {
   const lib = () => (opts.library || (typeof EXERCISE_LIBRARY !== 'undefined' ? EXERCISE_LIBRARY : []));
   const muscleLabels = opts.muscleLabels || (typeof MUSCLE_LABELS !== 'undefined' ? MUSCLE_LABELS : {});
   const detailMuscles = opts.detailMuscles || (typeof DETAIL_MUSCLES !== 'undefined' ? DETAIL_MUSCLES : {});
+  const hint = (id) => (typeof hintBtn === 'function' ? hintBtn(id) : '');
 
   const onCommit = opts.onCommit || function () {};
   let state = opts.state || St.load(lib());
@@ -93,6 +94,7 @@ function initProgram(root, opts = {}) {
           </div>
         </div>
         ${daysHtml}
+        <div class="meso-hint">Веса в программе нет: рабочий вес приложение подберёт калибровочной тренировкой (лесенка прикидок) и дальше будет рекомендовать само на экране «Зал».</div>
       </div>
       ${picker ? pickerHtml() : ''}`;
   }
@@ -142,7 +144,7 @@ function initProgram(root, opts = {}) {
           <button class="btn ghost" data-act="wiz-create" ${picked === wiz.count ? '' : 'disabled'}>Создать пустую</button>
         </div>
         <div class="meso-hint">Подбор — по принципам доказательного тренинга (Schoenfeld, Israetel/RP, Helms):
-        10–20 сетов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
+        10–20 подходов на группу в неделю, каждая группа ≥2×/нед, работа близко к отказу (RIR ведёт мезоцикл),
         приоритет упражнениям с растянутой позицией. Всё можно править после создания.</div>
       </section>`;
   }
@@ -153,7 +155,7 @@ function initProgram(root, opts = {}) {
       return `
         <div class="prog-item" data-day="${d.id}" data-idx="${i}">
           <div class="pi-top">
-            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a></div>
+            <div class="pi-name">${ex.name} <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬</a> ${hint('program-item')}</div>
             <div class="pi-ord">
               <button class="mini" data-act="swap-item" data-day="${d.id}" data-idx="${i}" title="Заменить аналогом">⇄</button>
               <button class="mini" data-act="up"   data-day="${d.id}" data-idx="${i}">↑</button>
@@ -162,10 +164,10 @@ function initProgram(root, opts = {}) {
             </div>
           </div>
           <div class="pi-params">
-            ${miniStep(d.id, i, 'repRangeMin', it.repRangeMin, 'повт min')}
-            ${miniStep(d.id, i, 'repRangeMax', it.repRangeMax, 'повт max')}
-            ${miniStep(d.id, i, 'workSets', it.workSets, 'сеты')}
-            ${miniStep(d.id, i, 'targetRIR', it.targetRIR, 'RIR')}
+            ${miniStep(d.id, i, 'repRangeMin', it.repRangeMin, 'повторы от')}
+            ${miniStep(d.id, i, 'repRangeMax', it.repRangeMax, 'повторы до')}
+            ${miniStep(d.id, i, 'workSets', it.workSets, 'подходы')}
+            ${miniStep(d.id, i, 'targetRIR', it.targetRIR, 'RIR (запас)')}
             ${miniStep(d.id, i, 'restSec', it.restSec, 'отдых, с')}
           </div>
         </div>`;

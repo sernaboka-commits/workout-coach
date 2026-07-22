@@ -155,14 +155,14 @@ function initAnalytics(root, opts = {}) {
     const maxSets = Math.max(1, ...ml.groups.flatMap((g) => g.muscles.map((m) => m.sets)));
     const body = ml.groups.length
       ? ml.groups.map((g) => `
-          <div class="ml-group"><b>${muscleLabels[g.group] || g.group}</b><small>${g.sets} сет · ${fmtTon(g.tonnage)}</small></div>
+          <div class="ml-group"><b>${muscleLabels[g.group] || g.group}</b><small>${g.sets} подх · ${fmtTon(g.tonnage)}</small></div>
           ${g.muscles.map((m) => `
             <div class="ml-row">
               <span class="ml-name">${(detailMuscles[m.muscle] || { label: m.muscle }).label}</span>
               <span class="ml-bar"><i style="width:${Math.round((m.sets / maxSets) * 100)}%"></i></span>
               <span class="ml-val">${m.sets} · ${fmtTon(m.tonnage)}</span>
             </div>`).join('')}`).join('')
-      : '<div class="pi-empty">На этой неделе рабочих сетов нет.</div>';
+      : '<div class="pi-empty">На этой неделе рабочих подходов нет.</div>';
     return `
       <section class="an-card">
         <div class="an-head">
@@ -174,7 +174,7 @@ function initAnalytics(root, opts = {}) {
           </div>
         </div>
         ${body}
-        <div class="ml-note">Эффективные сеты с учётом вторичных мышц: целевая 1.0 · синергист 0.5 · второстепенная 0.25. Тоннаж = вес × повторы × доля (свой вес тела не учитывается).</div>
+        <div class="ml-note">Эффективные подходы с учётом вторичных мышц: целевая 1.0 · синергист 0.5 · второстепенная 0.25. Тоннаж = вес × повторы × доля (свой вес тела не учитывается).</div>
       </section>`;
   }
 
@@ -200,7 +200,7 @@ function initAnalytics(root, opts = {}) {
         </section>
 
         <section class="an-card">
-          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>сеты · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
+          <div class="an-head"><b>Объём за неделю ${hint('corridor')}</b><small>подходы · коридор ${An.VOLUME_CORRIDOR[0]}–${An.VOLUME_CORRIDOR[1]}</small></div>
           <canvas id="an-vol" class="chart"></canvas>
         </section>
 

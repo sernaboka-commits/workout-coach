@@ -45,16 +45,50 @@ function epley1rm(weight, repsToFailure) {
 /**
  * Сколько повторов делать на том же весе, чтобы попасть в целевой RIR.
  * Модель: повторы_до_отказа = сделанные_повторы + фактический_RIR.
- * Целевые повторы = повторы_до_отказа − целевой_RIR, зажатые в диапазон.
- * Именно это чинит «9 повт при RIR 2 → 10 при RIR 3»: 9+2=11 до отказа,
- * при цели RIR 3 → 11−3 = 8 повторов.
+ * Целевые повторы = повторы_до_отказа − целевой_RIR, кламп только СВЕРХУ:
+ * ниже низа диапазона проекция честная (падение повторов от усталости —
+ * нормально, RP), решение о снижении веса — adjustLoadWithinSession.
  * Если RIR не записан — считаем, что цель была выполнена (повторы не меняем).
  */
 function projectReps(refSet, targetRIR, item) {
   const rir = refSet.rir == null ? targetRIR : Number(refSet.rir);
   const rtf = Number(refSet.reps) + rir;                  // повторы до отказа
   const reps = Math.round(rtf - targetRIR);
-  return Math.max(item.repRangeMin, Math.min(item.repRangeMax, reps));
+  return Math.max(1, Math.min(item.repRangeMax, reps));
+}
+
+/**
+ * Коррекция веса на СЛЕДУЮЩИЙ подход этой же сессии (правило RP: подход
+ * выпал из диапазона → скорректируй вес ~4% за каждый повтор мимо; попал
+ * в диапазон → вес держим, падение повторов от усталости — нормально).
+ * Считаем от повторов-до-отказа (rtf), чтобы ранняя остановка (высокий RIR)
+ * не считалась «слишком тяжёлым весом». Кап коррекции ±10%.
+ * → { dir:'down'|'up', weight, reps, pct } | null (null — вес держать)
+ */
+function adjustLoadWithinSession(prevSet, item, targetRIR, weightStep) {
+  const step = weightStep || 2.5;
+  const w = Number(prevSet.weight);
+  if (!(w > 0)) return null;                              // собственный вес — нечего корректировать
+  const reps = Number(prevSet.reps);
+  const rir = prevSet.rir == null ? targetRIR : Number(prevSet.rir);
+  const rtf = reps + rir;
+  const need = item.repRangeMin + targetRIR;              // rtf, нужный для низа диапазона
+
+  // ниже диапазона И до низа реально не дотянуться при целевом RIR
+  // (ранняя остановка с высоким RIR — не повод снижать вес)
+  if (reps < item.repRangeMin && rtf < need) {
+    const pct = Math.min(10, (item.repRangeMin - reps) * 4);
+    let weight = Math.min(roundToStep(w * (1 - pct / 100), step), w - step);
+    weight = Math.max(step, weight);
+    return { dir: 'down', weight, reps: item.repRangeMin, pct };
+  }
+  // выше диапазона с запасом (реально легко) — прибавка
+  if (reps > item.repRangeMax && rir >= targetRIR) {
+    const pct = Math.min(10, (reps - item.repRangeMax) * 4);
+    const weight = Math.max(roundToStep(w * (1 + pct / 100), step), w + step);
+    return { dir: 'up', weight, reps: item.repRangeMax, pct };
+  }
+  return null;
 }
 
 /** Целевой RIR недели роста (без делоуда). Рампа масштабируется под growWeeks. */
@@ -405,6 +439,7 @@ if (typeof module !== 'undefined') {
     roundToStep,
     epley1rm,
     projectReps,
+    adjustLoadWithinSession,
     nextSessionAdvice,
     targetRIRForWeek,
     mesoStatus,

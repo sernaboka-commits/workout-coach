@@ -129,6 +129,28 @@ t('второй рабочий сет → автоподстановка вес�
   assert(p.mode === 'work' && p.rec.weight === 62.5, JSON.stringify(p));
 });
 
+console.log('— nextSetRec: коррекция внутри сессии (кейс из зала, RP ~4%/повтор) —');
+const legItem = (o = {}) => item({ repRangeMin: 10, repRangeMax: 15, ...o });
+const legCtx = (history = []) => ({ meso: eng.mesoStatus(meso(2)), item: legItem(), exercise: { weightStep: 5 }, history });
+t('сет в диапазоне (61×10@2) → вес держим, честные повторы', () => {
+  const history = [{ isDeload: false, sets: [S(66, 8, 1), S(66, 8, 0), S(66, 8, 0)] }];
+  const p = ui.planExercise(legItem(), [S(61, 10, 2)], legCtx(history), eng);
+  assert(p.mode === 'work' && p.rec.weight === 61 && p.rec.reps === 10, JSON.stringify(p.rec));
+});
+t('сет выпал ниже диапазона (61×8@2) → снижение веса до 55, в тексте «4%»', () => {
+  const history = [{ isDeload: false, sets: [S(66, 8, 1)] }];
+  const p = ui.planExercise(legItem(), [S(61, 10, 2), S(61, 8, 2)], legCtx(history), eng);
+  assert(p.mode === 'work' && p.rec.weight === 55 && p.rec.reps === 10, JSON.stringify(p.rec));
+  assert(/4%/.test(p.rec.reason), p.rec.reason);
+});
+t('проекция чуть ниже низа из сета в диапазоне → честные повторы + «это нормально»', () => {
+  // 10@1 при цели RIR 2: до отказа 11 → 9 повт (ниже низа 10), вес держим
+  const history = [{ isDeload: false, sets: [S(61, 10, 2)] }];
+  const p = ui.planExercise(legItem(), [S(61, 10, 1)], legCtx(history), eng);
+  assert(p.rec.weight === 61 && p.rec.reps === 9, JSON.stringify(p.rec));
+  assert(/нормально/.test(p.rec.reason), p.rec.reason);
+});
+
 console.log('— sessionSummary: итог тренировки —');
 t('тоннаж = Σ вес×повт рабочих; калибровочные не в счёт; лучший подход', () => {
   const ses = { date: '2026-07-12', sets: [

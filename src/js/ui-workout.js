@@ -233,20 +233,38 @@ function planExercise(item, exSets, ctx, engine, opts = {}) {
   return { mode: 'work', rec };
 }
 
-/** Рекомендация на следующий сет ЭТОЙ сессии от фактического прошлого сета (RIR-aware). */
+/** Рекомендация на следующий сет ЭТОЙ сессии от фактического прошлого сета (RIR-aware).
+ *  Выпал из диапазона → коррекция веса ~4%/повтор (RP); в диапазоне → вес
+ *  держим, повторы проецируются честно (падение от усталости — норма). */
 function nextSetRec(prev, ctx, item, engine) {
   const t = ctx.meso.targetRIR;
-  const reps = engine.projectReps(prev, t, item);
   const rir = prev.rir == null ? t : prev.rir;
   const rtf = Number(prev.reps) + rir;
   const did = prev.weight > 0 ? `${prev.reps}×${prev.weight}` : `${prev.reps} повт`;
+  const didRir = prev.rir != null ? ' RIR ' + prev.rir : '';
+
+  const adj = engine.adjustLoadWithinSession
+    ? engine.adjustLoadWithinSession(prev, item, t, (ctx.exercise && ctx.exercise.weightStep) || 2.5)
+    : null;
+  if (adj) {
+    const range = `${item.repRangeMin}–${item.repRangeMax}`;
+    const reason = adj.dir === 'down'
+      ? `${did}${didRir} → до отказа ~${rtf}, а для диапазона ${range} при RIR ${t} нужно ~${item.repRangeMin + t}. Снижаем ~${adj.pct}% (правило ~4% за повтор): ${adj.weight} кг.`
+      : `${did}${didRir} — легко и выше диапазона ${range}. Добавляем ~${adj.pct}% (правило ~4% за повтор): ${adj.weight} кг.`;
+    return { weight: adj.weight, reps: adj.reps, targetRIR: t, needsCalibration: false, reason };
+  }
+
+  const reps = engine.projectReps(prev, t, item);
+  const fatigueNote = reps < item.repRangeMin
+    ? ' Повторы падают от усталости — это нормально, подход работает.'
+    : '';
   return {
     weight: prev.weight,
     reps,
     targetRIR: t,
     needsCalibration: false,
     bodyweight: !(prev.weight > 0) && !!(ctx.exercise && ctx.exercise.bodyweight),
-    reason: `Прошлый подход ${did}${prev.rir != null ? ' RIR ' + prev.rir : ''} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.`,
+    reason: `Прошлый подход ${did}${didRir} → до отказа ~${rtf}. Цель RIR ${t}: ${reps} повт.${fatigueNote}`,
   };
 }
 
@@ -256,7 +274,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory,
   };
-  const E = opts.engine || { recommend, calibrate, weightFromLadder, mesoStatus, context, projectReps, nextSessionAdvice };
+  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;

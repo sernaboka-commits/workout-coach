@@ -121,11 +121,52 @@ t('повторный перегруз (RIR 0 в 2 сетах, две сесси
   const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(2)), item: item(), exercise: ex, history });
   assert(r.weight === 57.5 && /5%/.test(r.reason), JSON.stringify(r));
 });
-t('projectReps: 9 повт RIR 2, цель RIR 3 → 8; цель RIR 1 → 10 (клампится в диапазон)', () => {
+t('projectReps: 9 повт RIR 2, цель RIR 3 → 8; цель RIR 1 → 10 (кламп сверху)', () => {
   const it = item({ repRangeMin: 6, repRangeMax: 10 });
   assert(eng.projectReps({ reps: 9, rir: 2 }, 3, it) === 8);
   assert(eng.projectReps({ reps: 9, rir: 2 }, 1, it) === 10);
   assert(eng.projectReps({ reps: 9, rir: null }, 2, it) === 9);  // нет RIR → повторы не меняем
+});
+t('projectReps: ниже низа диапазона НЕ поднимается (усталость — честно)', () => {
+  const it = item({ repRangeMin: 6, repRangeMax: 10 });
+  assert(eng.projectReps({ reps: 6, rir: 0 }, 2, it) === 4);     // раньше клампился к 6
+});
+
+console.log('— adjustLoadWithinSession: коррекция веса внутри сессии (RP ~4%/повтор) —');
+t('подход ниже диапазона → −4% за повтор: 61×8@2 (10–15, RIR 2) → 55', () => {
+  const it = item({ repRangeMin: 10, repRangeMax: 15 });
+  const a = eng.adjustLoadWithinSession({ weight: 61, reps: 8, rir: 2 }, it, 2, 5);
+  assert(a && a.dir === 'down' && a.weight === 55 && a.reps === 10, JSON.stringify(a));  // −8% → 56.1 → 55
+});
+t('сильный провал → кап −10%: 61×6@2 → 55 (61−10%=54.9→55)', () => {
+  const it = item({ repRangeMin: 10, repRangeMax: 15 });
+  const a = eng.adjustLoadWithinSession({ weight: 61, reps: 6, rir: 2 }, it, 2, 5);
+  assert(a && a.dir === 'down' && a.pct === 10 && a.weight === 55, JSON.stringify(a));
+});
+t('подход в диапазоне → null (вес держим, усталость — норма)', () => {
+  const it = item({ repRangeMin: 10, repRangeMax: 15 });
+  assert(eng.adjustLoadWithinSession({ weight: 61, reps: 10, rir: 2 }, it, 2, 5) === null);
+});
+t('остановился рано (мало повторов, но RIR высокий) → null, вес не трогаем', () => {
+  const it = item({ repRangeMin: 10, repRangeMax: 15 });
+  assert(eng.adjustLoadWithinSession({ weight: 61, reps: 8, rir: 4 }, it, 2, 5) === null);  // rtf 12 = need
+});
+t('легко и выше диапазона → +4% за лишний повтор: 100×14@3 (8–12, RIR 2) → 107.5', () => {
+  const it = item({ repRangeMin: 8, repRangeMax: 12 });
+  const a = eng.adjustLoadWithinSession({ weight: 100, reps: 14, rir: 3 }, it, 2, 2.5);
+  assert(a && a.dir === 'up' && a.pct === 8 && a.weight === 107.5, JSON.stringify(a));  // +8% → 108 → 107.5
+});
+t('в диапазоне, но тяжелее цели (10@1 при цели 2) → null: вес держим', () => {
+  const it = item({ repRangeMin: 10, repRangeMax: 15 });
+  assert(eng.adjustLoadWithinSession({ weight: 61, reps: 10, rir: 1 }, it, 2, 5) === null);
+});
+t('выше диапазона, но до отказа (RIR 0) → null: веса не добавляем', () => {
+  const it = item({ repRangeMin: 8, repRangeMax: 12 });
+  assert(eng.adjustLoadWithinSession({ weight: 100, reps: 14, rir: 0 }, it, 2, 2.5) === null);
+});
+t('собственный вес (weight 0) → null', () => {
+  const it = item({ repRangeMin: 8, repRangeMax: 12 });
+  assert(eng.adjustLoadWithinSession({ weight: 0, reps: 5, rir: 2 }, it, 2, 2.5) === null);
 });
 
 console.log('— recommend: делоуд —');

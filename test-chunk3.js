@@ -116,6 +116,12 @@ t('история есть → recommend, mode work', () => {
   const p = ui.planExercise(item(), [], ctx(2, history), eng);
   assert(p.mode === 'work' && p.rec.weight === 60 && !p.rec.needsCalibration, JSON.stringify(p));
 });
+t('совет «добавь повтор» доезжает: прошлая 60×8@2 ×3 → завтра цель 60×9', () => {
+  const history = [{ isDeload: false, sets: [S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)] }];
+  const p = ui.planExercise(item(), [], ctx(2, history), eng);
+  assert(p.rec.weight === 60 && p.rec.reps === 9, JSON.stringify(p.rec));
+  assert(/прогресси/i.test(p.rec.reason), p.rec.reason);
+});
 t('все рабочие сеты сделаны → mode done', () => {
   const history = [{ isDeload: false, sets: [S(60, 9, 2)] }];
   const exSets = [S(60, 9, 2), S(60, 9, 2), S(60, 9, 2)];

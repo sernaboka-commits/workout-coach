@@ -335,9 +335,14 @@ function recommend(exerciseId, setNo, ctx) {
       return { weight: 0, reps: item.repRangeMax, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
         reason: `Перерос ${item.repRangeMax} повт при RIR ${ref.rir} — усложни (пауза/медленный негатив) или добавь отягощение поясом.` };
     }
-    const reps = projectReps(ref, targetRIR, item);
+    const projected = projectReps(ref, targetRIR, item);
+    // выполнено с запасом → двойная прогрессия повторами (+1, без задвоения)
+    const reps = minR >= targetRIR
+      ? Math.min(item.repRangeMax, Math.max(projected, Number(ref.reps) + 1))
+      : projected;
+    const progTxt = minR >= targetRIR ? ' Двойная прогрессия: +1 повтор.' : '';
     return { weight: 0, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
-      reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.` };
+      reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.${progTxt}` };
   }
 
   // нет истории рабочих сетов
@@ -425,11 +430,21 @@ function recommend(exerciseId, setNo, ctx) {
     };
   }
 
-  // иначе тот же вес; повторы подбираются под целевой RIR (RIR-aware)
-  const reps = projectReps(refSet, targetRIR, item);
+  // иначе тот же вес. Прошлая сессия выполнена с запасом → двойная
+  // прогрессия: цель +1 повтор (Math.max с проекцией, чтобы при недельном
+  // падении целевого RIR прибавка не задваивалась). Запаса не было —
+  // честная проекция под целевой RIR (RIR-aware).
+  const projected = projectReps(refSet, targetRIR, item);
+  if (minRir >= targetRIR) {
+    const reps = Math.min(item.repRangeMax, Math.max(projected, Number(refSet.reps) + 1));
+    return {
+      weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Прошлый раз ${refSet.reps}×${workWeight}${rirTxt} — запас есть. Двойная прогрессия: цель ${reps} повт при RIR ${targetRIR}${reps >= item.repRangeMax ? ' (потолок диапазона — дальше +вес)' : ''}.`,
+    };
+  }
   return {
-    weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
-    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.`,
+    weight: workWeight, reps: projected, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${projected} повт.`,
   };
 }
 

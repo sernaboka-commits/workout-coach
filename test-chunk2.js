@@ -91,10 +91,21 @@ t('потолок, но БЕЗ запаса (RIR < цели) → веса не �
   const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(2)), item: item(), exercise: ex, history });
   assert(r.weight === 60, JSON.stringify(r));   // держим вес, не прогрессируем
 });
-t('RIR-aware: тот же вес, повторы подобраны под целевой RIR (не «+1 вслепую»)', () => {
-  const history = [sess([S(60, 9, 2), S(60, 9, 2), S(60, 8, 2)])];       // 9 при RIR2 → до отказа 11
+t('выполнено с запасом → двойная прогрессия: тот же вес, цель +1 повтор', () => {
+  const history = [sess([S(60, 9, 2), S(60, 9, 2), S(60, 8, 2)])];       // всё при RIR 2 = цель
   const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(2)), item: item(), exercise: ex, history });
-  assert(r.weight === 60 && r.reps === 9 && !r.needsCalibration, JSON.stringify(r)); // 11−2=9, а не 10
+  assert(r.weight === 60 && r.reps === 10 && !r.needsCalibration, JSON.stringify(r)); // 9 → цель 10
+  assert(/прогресси/i.test(r.reason), r.reason);
+});
+t('запаса не было (RIR ниже цели) → без +1, честная проекция', () => {
+  const history = [sess([S(60, 9, 1), S(60, 9, 1), S(60, 9, 1)])];       // RIR 1 < цели 2
+  const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(2)), item: item(), exercise: ex, history });
+  assert(r.weight === 60 && r.reps === 8, JSON.stringify(r));            // 9+1=10 до отказа, −2 = 8
+});
+t('неделя сменилась (цель RIR упала 2→1) → +1 не задваивается', () => {
+  const history = [sess([S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)])];
+  const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(4)), item: item(), exercise: ex, history });
+  assert(r.reps === 9, JSON.stringify(r));   // проекция 8+2−1=9 == ref+1 → 9, не 10
 });
 t('целевой RIR берётся из недели мезоцикла (нед.4 → RIR 1)', () => {
   const history = [sess([S(60, 9, 1), S(60, 9, 1), S(60, 8, 1)])];
@@ -221,10 +232,15 @@ t('bodyweight без истории → повторы, вес 0, без кал�
   const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history: [] });
   assert(r.weight === 0 && r.needsCalibration === false && r.bodyweight === true && r.reps >= 6, JSON.stringify(r));
 });
-t('bodyweight в диапазоне → повторы под целевой RIR, вес 0', () => {
+t('bodyweight с запасом → двойная прогрессия +1 повтор, вес 0', () => {
   const history = [sess([S(0, 8, 2)])];
   const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history });
-  assert(r.weight === 0 && r.reps === 8, JSON.stringify(r));   // 8+2=10 до отказа, −2 = 8
+  assert(r.weight === 0 && r.reps === 9, JSON.stringify(r));   // 8 при RIR 2 (цель) → цель 9
+});
+t('bodyweight тяжелее цели → без +1, честная проекция', () => {
+  const history = [sess([S(0, 8, 0)])];                        // RIR 0 < цели 2
+  const r = eng.recommend('pull-up', 1, { meso: eng.mesoStatus(meso(2)), item: item({ repRangeMin: 6, repRangeMax: 12 }), exercise: bwEx, history });
+  assert(r.weight === 0 && r.reps === 6, JSON.stringify(r));   // до отказа 8, −2 = 6
 });
 t('bodyweight потолок с запасом → усложни/отягощение, НЕ +вес', () => {
   const history = [sess([S(0, 12, 2), S(0, 12, 2), S(0, 12, 2)])];

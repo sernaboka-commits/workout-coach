@@ -272,7 +272,7 @@ function nextSetRec(prev, ctx, item, engine) {
 
 function initWorkout(root, opts = {}) {
   const S = opts.store || {
-    startSession, logSet, save, getExercise, exerciseHistory,
+    startSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
   const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
@@ -293,6 +293,7 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
+  const volAdded = {};     // exId -> true: «+1 подход» уже добавлен в программу
   let timer = null;        // { endTs, restSec, handle }
   let showSummary = false; // оверлей итога тренировки
 
@@ -473,8 +474,15 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
+      // «+1 подход — прогресс объёмом» делаем действием: кнопка сразу пишет
+      // workSets в программу, чтобы совет реально доехал до след. тренировки
+      const volBtn = adv && adv.volume && item
+        ? (volAdded[e.exerciseId]
+          ? `<div class="sum-vol">✓ добавлено: теперь ${item.workSets} подхода в программе</div>`
+          : `<button class="btn sm ghost sum-vol-btn" data-act="vol-add" data-ex="${e.exerciseId}">+1 подход в программу (${item.workSets}→${item.workSets + 1})</button>`)
+        : '';
       const advHtml = adv
-        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}${volBtn}</div>`
         : (e.calib ? '<div class="sum-advice lv-hold">Калибровка завершена — рабочий вес рассчитан, увидишь его в следующей тренировке</div>' : '');
       const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
@@ -556,6 +564,17 @@ function initWorkout(root, opts = {}) {
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
     if (act === 'finish') { showSummary = true; render(); return; }
+    if (act === 'vol-add') {
+      const idx = day.items.findIndex((i) => i.exerciseId === exId);
+      if (idx >= 0 && !volAdded[exId]) {
+        state = S.updateDayItem(state, day.id, idx, { workSets: day.items[idx].workSets + 1 });
+        // локальная ссылка day указывает на старый объект — обновляем из state
+        day = state.program.days.find((d) => d.id === day.id) || day;
+        S.save(state); onCommit(state);
+        volAdded[exId] = true;
+      }
+      render(); return;
+    }
     if (act === 'close-summary') { showSummary = false; render(); return; }
     if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }

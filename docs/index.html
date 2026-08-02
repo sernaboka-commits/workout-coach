@@ -624,7 +624,7 @@ const HELP_TERMS = {
   },
   'double-progression': {
     title: 'Двойная прогрессия',
-    short: 'Два рычага роста по очереди: сначала добавляешь ПОВТОРЫ в заданном диапазоне (например 8–12), а когда все рабочие подходы дошли до потолка диапазона — добавляется ВЕС, и повторы возвращаются к нижней границе. Простое правило, которое надёжно двигает нагрузку вверх.',
+    short: 'Два рычага роста по очереди: сначала добавляешь ПОВТОРЫ в заданном диапазоне (например 8–12), а когда все рабочие подходы дошли до потолка диапазона — добавляется ВЕС, и повторы возвращаются к нижней границе. Рекомендация на следующую тренировку сама ставит цель +1 повтор, если прошлая сессия выполнена с запасом; «+1 подход» из итога тренировки добавляется в программу кнопкой.',
   },
   'effective-sets': {
     title: 'Эффективные подходы по мышцам',
@@ -1628,9 +1628,14 @@ function recommend(exerciseId, setNo, ctx) {
       return { weight: 0, reps: item.repRangeMax, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
         reason: `Перерос ${item.repRangeMax} повт при RIR ${ref.rir} — усложни (пауза/медленный негатив) или добавь отягощение поясом.` };
     }
-    const reps = projectReps(ref, targetRIR, item);
+    const projected = projectReps(ref, targetRIR, item);
+    // выполнено с запасом → двойная прогрессия повторами (+1, без задвоения)
+    const reps = minR >= targetRIR
+      ? Math.min(item.repRangeMax, Math.max(projected, Number(ref.reps) + 1))
+      : projected;
+    const progTxt = minR >= targetRIR ? ' Двойная прогрессия: +1 повтор.' : '';
     return { weight: 0, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult, bodyweight: true,
-      reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.` };
+      reason: `Прошлый ${ref.reps} повт${ref.rir != null ? ' RIR ' + ref.rir : ''} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.${progTxt}` };
   }
 
   // нет истории рабочих сетов
@@ -1718,11 +1723,21 @@ function recommend(exerciseId, setNo, ctx) {
     };
   }
 
-  // иначе тот же вес; повторы подбираются под целевой RIR (RIR-aware)
-  const reps = projectReps(refSet, targetRIR, item);
+  // иначе тот же вес. Прошлая сессия выполнена с запасом → двойная
+  // прогрессия: цель +1 повтор (Math.max с проекцией, чтобы при недельном
+  // падении целевого RIR прибавка не задваивалась). Запаса не было —
+  // честная проекция под целевой RIR (RIR-aware).
+  const projected = projectReps(refSet, targetRIR, item);
+  if (minRir >= targetRIR) {
+    const reps = Math.min(item.repRangeMax, Math.max(projected, Number(refSet.reps) + 1));
+    return {
+      weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+      reason: `Прошлый раз ${refSet.reps}×${workWeight}${rirTxt} — запас есть. Двойная прогрессия: цель ${reps} повт при RIR ${targetRIR}${reps >= item.repRangeMax ? ' (потолок диапазона — дальше +вес)' : ''}.`,
+    };
+  }
   return {
-    weight: workWeight, reps, targetRIR, isDeload: false, needsCalibration: false, lastResult,
-    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${reps} повт.`,
+    weight: workWeight, reps: projected, targetRIR, isDeload: false, needsCalibration: false, lastResult,
+    reason: `Прошлый подход ${refSet.reps}×${workWeight}${rirTxt} → до отказа ~${rtf}. Цель RIR ${targetRIR}: ${projected} повт.`,
   };
 }
 
@@ -2694,7 +2709,7 @@ function nextSetRec(prev, ctx, item, engine) {
 
 function initWorkout(root, opts = {}) {
   const S = opts.store || {
-    startSession, logSet, save, getExercise, exerciseHistory,
+    startSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
   const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice };
   const onCommit = opts.onCommit || function () {};
@@ -2715,6 +2730,7 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
+  const volAdded = {};     // exId -> true: «+1 подход» уже добавлен в программу
   let timer = null;        // { endTs, restSec, handle }
   let showSummary = false; // оверлей итога тренировки
 
@@ -2895,8 +2911,15 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
+      // «+1 подход — прогресс объёмом» делаем действием: кнопка сразу пишет
+      // workSets в программу, чтобы совет реально доехал до след. тренировки
+      const volBtn = adv && adv.volume && item
+        ? (volAdded[e.exerciseId]
+          ? `<div class="sum-vol">✓ добавлено: теперь ${item.workSets} подхода в программе</div>`
+          : `<button class="btn sm ghost sum-vol-btn" data-act="vol-add" data-ex="${e.exerciseId}">+1 подход в программу (${item.workSets}→${item.workSets + 1})</button>`)
+        : '';
       const advHtml = adv
-        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}</div>`
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}${volBtn}</div>`
         : (e.calib ? '<div class="sum-advice lv-hold">Калибровка завершена — рабочий вес рассчитан, увидишь его в следующей тренировке</div>' : '');
       const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
@@ -2978,6 +3001,17 @@ function initWorkout(root, opts = {}) {
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
     if (act === 'finish') { showSummary = true; render(); return; }
+    if (act === 'vol-add') {
+      const idx = day.items.findIndex((i) => i.exerciseId === exId);
+      if (idx >= 0 && !volAdded[exId]) {
+        state = S.updateDayItem(state, day.id, idx, { workSets: day.items[idx].workSets + 1 });
+        // локальная ссылка day указывает на старый объект — обновляем из state
+        day = state.program.days.find((d) => d.id === day.id) || day;
+        S.save(state); onCommit(state);
+        volAdded[exId] = true;
+      }
+      render(); return;
+    }
     if (act === 'close-summary') { showSummary = false; render(); return; }
     if (act === 'switch-day') { setDay(btn.dataset.day); return; }
     if (act === 'rest+') { if (timer) { timer.endTs += 15000; timer.restSec += 15; if (!timer.handle) startRest(computeRemaining(timer.endTs, Date.now())); render(); } return; }

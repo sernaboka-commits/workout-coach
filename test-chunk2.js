@@ -264,10 +264,26 @@ t('потолок повторов с запасом (RIR ≥ цели) → weig
   const r = adv([S(60, 12, 2), S(60, 12, 2), S(60, 12, 2)], item(), 2, { weightStep: 2.5 });
   assert(r.lever === 'weight' && /\+2\.5 кг/.test(r.text), JSON.stringify(r));
 });
-t('в диапазоне с запасом → reps (+повтор) и опция объёма', () => {
+t('в диапазоне с запасом ровно в цель → reps (+повтор), без объёма', () => {
   const r = adv([S(60, 9, 2), S(60, 9, 2), S(60, 8, 2)], item(), 2, {});
-  assert(r.lever === 'reps' && /повтор/.test(r.text), JSON.stringify(r));
-  assert(r.volume && /подход/.test(r.volume), 'нет опции объёма: ' + JSON.stringify(r));
+  assert(r.lever === 'reps' && /повтор/.test(r.text) && !r.addSet, JSON.stringify(r));
+});
+t('заметно легче цели (RIR ≥ цель+1, не потолок) → sets: тренер добавляет подход', () => {
+  const r = adv([S(60, 9, 3), S(60, 9, 3), S(60, 8, 4)], item(), 2, {});   // все RIR ≥ 3
+  assert(r.lever === 'sets' && r.addSet && r.addSet.from === 3 && r.addSet.to === 4, JSON.stringify(r));
+  assert(/подход/.test(r.text), r.text);
+});
+t('легче цели, но потолок взят → weight приоритетнее sets', () => {
+  const r = adv([S(60, 12, 3), S(60, 12, 3), S(60, 12, 3)], item(), 2, { weightStep: 2.5 });
+  assert(r.lever === 'weight', JSON.stringify(r));
+});
+t('легче цели перед делоудом (growWeek=false) → без sets', () => {
+  const r = adv([S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)], item(), 2, { growWeek: false });
+  assert(r.lever !== 'sets', JSON.stringify(r));
+});
+t('bodyweight заметно легче цели → sets', () => {
+  const r = adv([S(0, 8, 4), S(0, 8, 4), S(0, 8, 3)], item({ repRangeMin: 6, repRangeMax: 12 }), 2, { bodyweight: true });
+  assert(r.lever === 'sets' && r.addSet && r.addSet.to === 4, JSON.stringify(r));
 });
 t('взял повторы, но тяжелее цели (RIR < цели) → hold', () => {
   const r = adv([S(60, 10, 1), S(60, 9, 1), S(60, 8, 0)], item(), 2, {}); // 1 сет rir0 (<2), в диапазоне
@@ -277,10 +293,10 @@ t('до отказа ниже нижней границы диапазона →
   const r = adv([S(60, 5, 0)], item({ repRangeMin: 8, repRangeMax: 12 }), 2, { weightStep: 2.5 });
   assert(r.lever === 'reduce' && /тяжелов/.test(r.text), JSON.stringify(r));
 });
-t('уже 5 подходов → объём не предлагаем (кэп)', () => {
-  const five = [S(60, 9, 2), S(60, 9, 2), S(60, 9, 2), S(60, 9, 2), S(60, 9, 2)];
+t('уже 5 подходов → объём не добавляем (кэп), даже если легко', () => {
+  const five = [S(60, 9, 3), S(60, 9, 3), S(60, 9, 3), S(60, 9, 3), S(60, 9, 3)];
   const r = adv(five, item(), 2, { setsCap: 5 });
-  assert(r.lever === 'reps' && !r.volume, JSON.stringify(r));
+  assert(r.lever !== 'sets' && !r.addSet, JSON.stringify(r));
 });
 t('нет рабочих сетов → null', () => {
   assert(adv([S(40, 15, 4, { isCalibration: true })], item(), 2, {}) === null);

@@ -268,6 +268,29 @@ function nextSetRec(prev, ctx, item, engine) {
   };
 }
 
+/**
+ * Какие упражнения дня получают автоматический «+1 подход» по итогу сессии
+ * (чистая функция). Пропускаем недовыполненный план — это же защищает от
+ * повторного добавления: после +1 сделанных станет меньше нового workSets.
+ * → [{ exerciseId, idx, from, to }]
+ */
+function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek) {
+  const out = [];
+  (day.items || []).forEach((item, idx) => {
+    const exSets = (sessionSets || []).filter((s) => s.exerciseId === item.exerciseId);
+    const workDone = exSets.filter((s) => !s.isCalibration).length;
+    if (workDone < item.workSets) return;
+    const ex = resolveEx(item.exerciseId) || { weightStep: 2.5 };
+    const adv = engine.nextSessionAdvice(exSets, item, targetRIR, {
+      weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight,
+    });
+    if (adv && adv.lever === 'sets' && adv.addSet) {
+      out.push({ exerciseId: item.exerciseId, idx, from: adv.addSet.from, to: adv.addSet.to });
+    }
+  });
+  return out;
+}
+
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
 
 function initWorkout(root, opts = {}) {
@@ -293,7 +316,8 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
-  const volAdded = {};     // exId -> true: «+1 подход» уже добавлен в программу
+  const volAdded = {};     // exId -> {from,to}: тренер добавил подход в программу
+  let volApplied = false;  // автообъём применён (один раз за сессию)
   let timer = null;        // { endTs, restSec, handle }
   let showSummary = false; // оверлей итога тренировки
 
@@ -474,15 +498,14 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
-      // «+1 подход — прогресс объёмом» делаем действием: кнопка сразу пишет
-      // workSets в программу, чтобы совет реально доехал до след. тренировки
-      const volBtn = adv && adv.volume && item
-        ? (volAdded[e.exerciseId]
-          ? `<div class="sum-vol">✓ добавлено: теперь ${item.workSets} подхода в программе</div>`
-          : `<button class="btn sm ghost sum-vol-btn" data-act="vol-add" data-ex="${e.exerciseId}">+1 подход в программу (${item.workSets}→${item.workSets + 1})</button>`)
+      // автообъём уже применён в applyAutoVolume — показываем факт + отмену
+      const v = volAdded[e.exerciseId];
+      const volHtml = v
+        ? `<div class="sum-vol">✓ тренер добавил 1 подход в программу (${v.from}→${v.to})
+             <button class="mini" data-act="vol-undo" data-ex="${e.exerciseId}">отменить</button></div>`
         : '';
       const advHtml = adv
-        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}${volBtn}</div>`
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${volHtml}</div>`
         : (e.calib ? '<div class="sum-advice lv-hold">Калибровка завершена — рабочий вес рассчитан, увидишь его в следующей тренировке</div>' : '');
       const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
@@ -563,15 +586,15 @@ function initWorkout(root, opts = {}) {
 
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
-    if (act === 'finish') { showSummary = true; render(); return; }
-    if (act === 'vol-add') {
+    if (act === 'finish') { applyAutoVolume(); showSummary = true; render(); return; }
+    if (act === 'vol-undo') {
+      const v = volAdded[exId];
       const idx = day.items.findIndex((i) => i.exerciseId === exId);
-      if (idx >= 0 && !volAdded[exId]) {
-        state = S.updateDayItem(state, day.id, idx, { workSets: day.items[idx].workSets + 1 });
-        // локальная ссылка day указывает на старый объект — обновляем из state
+      if (v && idx >= 0) {
+        state = S.updateDayItem(state, day.id, idx, { workSets: v.from });
         day = state.program.days.find((d) => d.id === day.id) || day;
         S.save(state); onCommit(state);
-        volAdded[exId] = true;
+        delete volAdded[exId];
       }
       render(); return;
     }
@@ -644,6 +667,24 @@ function initWorkout(root, opts = {}) {
     startRest(item.restSec);
   }
 
+  /** Автообъём: тренер сам добавляет «+1 подход» в программу по итогу
+   *  сессии (adv.lever === 'sets'); один раз, с возможностью отмены в итоге. */
+  function applyAutoVolume() {
+    if (volApplied || meso.isDeload) return;
+    volApplied = true;
+    const adds = autoVolumeAdds(
+      day, liveSession().sets, meso.targetRIR,
+      (id) => S.getExercise(state, id), E, !meso.isDeload
+    );
+    if (!adds.length) return;
+    for (const a of adds) {
+      state = S.updateDayItem(state, day.id, a.idx, { workSets: a.to });
+      volAdded[a.exerciseId] = { from: a.from, to: a.to };
+    }
+    day = state.program.days.find((d) => d.id === day.id) || day;
+    S.save(state); onCommit(state);
+  }
+
   function removeSet(setId) {
     // локальная правка: удаляем сет из сессии и пересохраняем
     if (!session) return;
@@ -710,6 +751,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds,
   };
 }

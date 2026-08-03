@@ -623,8 +623,8 @@ const HELP_TERMS = {
     short: 'Неделя восстановления после 5 недель роста: 60% рабочего веса, половина подходов, RIR 4 (очень легко). Мышцы и суставы восстанавливаются, накопленная усталость уходит — следующий цикл начинаешь свежим и сильнее. Пропускать не стоит: без разгрузки прогресс упирается в усталость.',
   },
   'double-progression': {
-    title: 'Двойная прогрессия',
-    short: 'Два рычага роста по очереди: сначала добавляешь ПОВТОРЫ в заданном диапазоне (например 8–12), а когда все рабочие подходы дошли до потолка диапазона — добавляется ВЕС, и повторы возвращаются к нижней границе. Рекомендация на следующую тренировку сама ставит цель +1 повтор, если прошлая сессия выполнена с запасом; «+1 подход» из итога тренировки добавляется в программу кнопкой.',
+    title: 'Прогрессия: тренер решает сам',
+    short: 'После каждой тренировки приложение само выбирает ОДИН рычаг на следующую. Взял потолок повторов с запасом → +вес (и назад к низу диапазона). Было заметно легче цели (RIR выше целевого на 1+) → +1 подход: он добавляется в программу автоматически, в итоге тренировки это видно и можно отменить. Просто есть запас → цель +1 повтор. Перегруз (2+ подхода до отказа) → вес держится или снижается. Тебе остаётся только тренироваться и честно записывать RIR.',
   },
   'effective-sets': {
     title: 'Эффективные подходы по мышцам',
@@ -1408,7 +1408,9 @@ function summarize(sets) {
  * Методология: двойная прогрессия (Helms/Nippard) + прогрессия объёма
  * MEV→MRV (Israetel/RP) + автрегуляция по RIR.
  * sets — рабочие сеты завершённой сессии по этому упражнению.
- * → { lever:'weight'|'reps'|'sets'|'hold'|'reduce', text, volume } | null
+ * → { lever:'weight'|'reps'|'sets'|'harder'|'hold'|'reduce', text, addSet? } | null
+ * lever 'sets' (заметно легче цели) сопровождается addSet {from,to} —
+ * UI применяет его в программу автоматически при завершении тренировки.
  */
 function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   const work = (sets || []).filter((s) => !s.isCalibration);
@@ -1424,46 +1426,42 @@ function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   const failCount = work.filter((s) => s.rir != null && Number(s.rir) <= 0).length;
   const nSets = work.length;
 
-  // собственный вес: рычаги только повторы/RIR/усложнение (веса нет)
+  // тренер решает сам — ОДИН рычаг, по иерархии:
+  // перегруз → потолок с запасом (+вес) → заметно легче цели (+подход,
+  // применяется в программу автоматически) → запас (+повтор) → снижение/держать
+  const canAddSet = failCount === 0 && nSets < cap && grow;
+
+  // собственный вес: рычаги только повторы/подходы/усложнение (веса нет)
   if (opts.bodyweight) {
     const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
-    let bl, bt;
-    if (failCount >= 2) { bl = 'hold'; bt = `было ${failCount} подхода до отказа — удержи повторы, не гонись`; }
-    else if (topReps >= item.repRangeMax && minRIR >= targetRIR) { bl = 'harder'; bt = `перерос ${item.repRangeMax} повт (RIR ${minRIR}) — усложни (пауза/медленный негатив) или добавь отягощение поясом`; }
-    else if (minRIR >= targetRIR) { bl = 'reps'; bt = `добавь повтор (цель ${goal} при RIR ${targetRIR})`; }
-    else { bl = 'hold'; bt = `тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори столько же, целься в RIR ${targetRIR}`; }
-    let bvol = null;
-    if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (bl === 'reps' || bl === 'hold')) {
-      bvol = `или прибавь 1 подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+    if (failCount >= 2) return { lever: 'hold', text: `было ${failCount} подхода до отказа — удержи повторы, не гонись` };
+    if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+      return { lever: 'harder', text: `перерос ${item.repRangeMax} повт (RIR ${minRIR}) — усложни (пауза/медленный негатив) или добавь отягощение поясом` };
     }
-    return { lever: bl, text: bt, volume: bvol };
+    if (minRIR >= targetRIR + 1 && canAddSet) {
+      return { lever: 'sets', text: `заметно легче цели (RIR ${minRIR} при цели ${targetRIR}) — добавляю 1 подход (${nSets}→${nSets + 1})`, addSet: { from: nSets, to: nSets + 1 } };
+    }
+    if (minRIR >= targetRIR) return { lever: 'reps', text: `добавь повтор (цель ${goal} при RIR ${targetRIR})` };
+    return { lever: 'hold', text: `тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори столько же, целься в RIR ${targetRIR}` };
   }
 
-  let lever, text;
   if (failCount >= 2) {
-    lever = 'reduce';
-    text = `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй`;
-  } else if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
-    lever = 'weight';
-    text = `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})`;
-  } else if (minRIR >= targetRIR) {
-    lever = 'reps';
+    return { lever: 'reduce', text: `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй` };
+  }
+  if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+    return { lever: 'weight', text: `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})` };
+  }
+  if (minRIR >= targetRIR + 1 && canAddSet) {
+    return { lever: 'sets', text: `заметно легче цели (RIR ${minRIR} при цели ${targetRIR}) — добавляю 1 подход (${nSets}→${nSets + 1}), вес тот же`, addSet: { from: nSets, to: nSets + 1 } };
+  }
+  if (minRIR >= targetRIR) {
     const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
-    text = `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})`;
-  } else if (topReps < item.repRangeMin) {
-    lever = 'reduce';
-    text = `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг`;
-  } else {
-    lever = 'hold';
-    text = `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}`;
+    return { lever: 'reps', text: `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})` };
   }
-
-  // объём — вторичный рычаг: только при запасе восстановления и не у потолка подходов
-  let volume = null;
-  if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (lever === 'reps' || lever === 'hold')) {
-    volume = `или прибавь 1 рабочий подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+  if (topReps < item.repRangeMin) {
+    return { lever: 'reduce', text: `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг` };
   }
-  return { lever, text, volume };
+  return { lever: 'hold', text: `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}` };
 }
 
 /* ---------- мезоцикл ---------- */
@@ -2705,6 +2703,29 @@ function nextSetRec(prev, ctx, item, engine) {
   };
 }
 
+/**
+ * Какие упражнения дня получают автоматический «+1 подход» по итогу сессии
+ * (чистая функция). Пропускаем недовыполненный план — это же защищает от
+ * повторного добавления: после +1 сделанных станет меньше нового workSets.
+ * → [{ exerciseId, idx, from, to }]
+ */
+function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek) {
+  const out = [];
+  (day.items || []).forEach((item, idx) => {
+    const exSets = (sessionSets || []).filter((s) => s.exerciseId === item.exerciseId);
+    const workDone = exSets.filter((s) => !s.isCalibration).length;
+    if (workDone < item.workSets) return;
+    const ex = resolveEx(item.exerciseId) || { weightStep: 2.5 };
+    const adv = engine.nextSessionAdvice(exSets, item, targetRIR, {
+      weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight,
+    });
+    if (adv && adv.lever === 'sets' && adv.addSet) {
+      out.push({ exerciseId: item.exerciseId, idx, from: adv.addSet.from, to: adv.addSet.to });
+    }
+  });
+  return out;
+}
+
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
 
 function initWorkout(root, opts = {}) {
@@ -2730,7 +2751,8 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
-  const volAdded = {};     // exId -> true: «+1 подход» уже добавлен в программу
+  const volAdded = {};     // exId -> {from,to}: тренер добавил подход в программу
+  let volApplied = false;  // автообъём применён (один раз за сессию)
   let timer = null;        // { endTs, restSec, handle }
   let showSummary = false; // оверлей итога тренировки
 
@@ -2911,15 +2933,14 @@ function initWorkout(root, opts = {}) {
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
-      // «+1 подход — прогресс объёмом» делаем действием: кнопка сразу пишет
-      // workSets в программу, чтобы совет реально доехал до след. тренировки
-      const volBtn = adv && adv.volume && item
-        ? (volAdded[e.exerciseId]
-          ? `<div class="sum-vol">✓ добавлено: теперь ${item.workSets} подхода в программе</div>`
-          : `<button class="btn sm ghost sum-vol-btn" data-act="vol-add" data-ex="${e.exerciseId}">+1 подход в программу (${item.workSets}→${item.workSets + 1})</button>`)
+      // автообъём уже применён в applyAutoVolume — показываем факт + отмену
+      const v = volAdded[e.exerciseId];
+      const volHtml = v
+        ? `<div class="sum-vol">✓ тренер добавил 1 подход в программу (${v.from}→${v.to})
+             <button class="mini" data-act="vol-undo" data-ex="${e.exerciseId}">отменить</button></div>`
         : '';
       const advHtml = adv
-        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${adv.volume ? `<span class="sum-vol"> · ${adv.volume}</span>` : ''}${volBtn}</div>`
+        ? `<div class="sum-advice lv-${adv.lever}"><b>След. раз:</b> ${adv.text}${volHtml}</div>`
         : (e.calib ? '<div class="sum-advice lv-hold">Калибровка завершена — рабочий вес рассчитан, увидишь его в следующей тренировке</div>' : '');
       const top = e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : '';
       return `<div class="sum-ex">
@@ -3000,15 +3021,15 @@ function initWorkout(root, opts = {}) {
 
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
-    if (act === 'finish') { showSummary = true; render(); return; }
-    if (act === 'vol-add') {
+    if (act === 'finish') { applyAutoVolume(); showSummary = true; render(); return; }
+    if (act === 'vol-undo') {
+      const v = volAdded[exId];
       const idx = day.items.findIndex((i) => i.exerciseId === exId);
-      if (idx >= 0 && !volAdded[exId]) {
-        state = S.updateDayItem(state, day.id, idx, { workSets: day.items[idx].workSets + 1 });
-        // локальная ссылка day указывает на старый объект — обновляем из state
+      if (v && idx >= 0) {
+        state = S.updateDayItem(state, day.id, idx, { workSets: v.from });
         day = state.program.days.find((d) => d.id === day.id) || day;
         S.save(state); onCommit(state);
-        volAdded[exId] = true;
+        delete volAdded[exId];
       }
       render(); return;
     }
@@ -3081,6 +3102,24 @@ function initWorkout(root, opts = {}) {
     startRest(item.restSec);
   }
 
+  /** Автообъём: тренер сам добавляет «+1 подход» в программу по итогу
+   *  сессии (adv.lever === 'sets'); один раз, с возможностью отмены в итоге. */
+  function applyAutoVolume() {
+    if (volApplied || meso.isDeload) return;
+    volApplied = true;
+    const adds = autoVolumeAdds(
+      day, liveSession().sets, meso.targetRIR,
+      (id) => S.getExercise(state, id), E, !meso.isDeload
+    );
+    if (!adds.length) return;
+    for (const a of adds) {
+      state = S.updateDayItem(state, day.id, a.idx, { workSets: a.to });
+      volAdded[a.exerciseId] = { from: a.from, to: a.to };
+    }
+    day = state.program.days.find((d) => d.id === day.id) || day;
+    S.save(state); onCommit(state);
+  }
+
   function removeSet(setId) {
     // локальная правка: удаляем сет из сессии и пересохраняем
     if (!session) return;
@@ -3147,7 +3186,7 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds,
   };
 }
 

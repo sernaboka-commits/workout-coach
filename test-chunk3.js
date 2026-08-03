@@ -157,6 +157,31 @@ t('проекция чуть ниже низа из сета в диапазон
   assert(/нормально/.test(p.rec.reason), p.rec.reason);
 });
 
+console.log('— autoVolumeAdds: тренер сам добавляет подход в программу —');
+const dayOf = (workSets = 3) => ({ id: 'd1', label: 'A', items: [{ ...item(), workSets }] });
+const resolveEx = () => ({ weightStep: 2.5 });
+t('заметно легче цели и план выполнен → [{3→4}]', () => {
+  const sets = [S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)];
+  const adds = ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, true);
+  assert(adds.length === 1 && adds[0].from === 3 && adds[0].to === 4, JSON.stringify(adds));
+});
+t('план недовыполнен (2 из 3) → пусто', () => {
+  const sets = [S(60, 9, 3), S(60, 9, 3)];
+  assert(ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, true).length === 0);
+});
+t('идемпотентность: после +1 (workSets 4, сделано 3) → пусто', () => {
+  const sets = [S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)];
+  assert(ui.autoVolumeAdds(dayOf(4), sets, 2, resolveEx, eng, true).length === 0);
+});
+t('запас ровно в цель (не легче) → пусто, рычаг остаётся повторам', () => {
+  const sets = [S(60, 9, 2), S(60, 9, 2), S(60, 9, 2)];
+  assert(ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, true).length === 0);
+});
+t('перед делоудом (growWeek=false) → пусто', () => {
+  const sets = [S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)];
+  assert(ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, false).length === 0);
+});
+
 console.log('— sessionSummary: итог тренировки —');
 t('тоннаж = Σ вес×повт рабочих; калибровочные не в счёт; лучший подход', () => {
   const ses = { date: '2026-07-12', sets: [

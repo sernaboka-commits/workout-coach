@@ -115,7 +115,9 @@ function summarize(sets) {
  * Методология: двойная прогрессия (Helms/Nippard) + прогрессия объёма
  * MEV→MRV (Israetel/RP) + автрегуляция по RIR.
  * sets — рабочие сеты завершённой сессии по этому упражнению.
- * → { lever:'weight'|'reps'|'sets'|'hold'|'reduce', text, volume } | null
+ * → { lever:'weight'|'reps'|'sets'|'harder'|'hold'|'reduce', text, addSet? } | null
+ * lever 'sets' (заметно легче цели) сопровождается addSet {from,to} —
+ * UI применяет его в программу автоматически при завершении тренировки.
  */
 function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   const work = (sets || []).filter((s) => !s.isCalibration);
@@ -131,46 +133,42 @@ function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   const failCount = work.filter((s) => s.rir != null && Number(s.rir) <= 0).length;
   const nSets = work.length;
 
-  // собственный вес: рычаги только повторы/RIR/усложнение (веса нет)
+  // тренер решает сам — ОДИН рычаг, по иерархии:
+  // перегруз → потолок с запасом (+вес) → заметно легче цели (+подход,
+  // применяется в программу автоматически) → запас (+повтор) → снижение/держать
+  const canAddSet = failCount === 0 && nSets < cap && grow;
+
+  // собственный вес: рычаги только повторы/подходы/усложнение (веса нет)
   if (opts.bodyweight) {
     const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
-    let bl, bt;
-    if (failCount >= 2) { bl = 'hold'; bt = `было ${failCount} подхода до отказа — удержи повторы, не гонись`; }
-    else if (topReps >= item.repRangeMax && minRIR >= targetRIR) { bl = 'harder'; bt = `перерос ${item.repRangeMax} повт (RIR ${minRIR}) — усложни (пауза/медленный негатив) или добавь отягощение поясом`; }
-    else if (minRIR >= targetRIR) { bl = 'reps'; bt = `добавь повтор (цель ${goal} при RIR ${targetRIR})`; }
-    else { bl = 'hold'; bt = `тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори столько же, целься в RIR ${targetRIR}`; }
-    let bvol = null;
-    if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (bl === 'reps' || bl === 'hold')) {
-      bvol = `или прибавь 1 подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+    if (failCount >= 2) return { lever: 'hold', text: `было ${failCount} подхода до отказа — удержи повторы, не гонись` };
+    if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+      return { lever: 'harder', text: `перерос ${item.repRangeMax} повт (RIR ${minRIR}) — усложни (пауза/медленный негатив) или добавь отягощение поясом` };
     }
-    return { lever: bl, text: bt, volume: bvol };
+    if (minRIR >= targetRIR + 1 && canAddSet) {
+      return { lever: 'sets', text: `заметно легче цели (RIR ${minRIR} при цели ${targetRIR}) — добавляю 1 подход (${nSets}→${nSets + 1})`, addSet: { from: nSets, to: nSets + 1 } };
+    }
+    if (minRIR >= targetRIR) return { lever: 'reps', text: `добавь повтор (цель ${goal} при RIR ${targetRIR})` };
+    return { lever: 'hold', text: `тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори столько же, целься в RIR ${targetRIR}` };
   }
 
-  let lever, text;
   if (failCount >= 2) {
-    lever = 'reduce';
-    text = `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй`;
-  } else if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
-    lever = 'weight';
-    text = `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})`;
-  } else if (minRIR >= targetRIR) {
-    lever = 'reps';
+    return { lever: 'reduce', text: `было ${failCount} подхода до отказа — удержи вес или −${step} кг, объём не добавляй` };
+  }
+  if (topReps >= item.repRangeMax && minRIR >= targetRIR) {
+    return { lever: 'weight', text: `+${step} кг и вернись к ${item.repRangeMin} повт (потолок взят с запасом RIR ${minRIR})` };
+  }
+  if (minRIR >= targetRIR + 1 && canAddSet) {
+    return { lever: 'sets', text: `заметно легче цели (RIR ${minRIR} при цели ${targetRIR}) — добавляю 1 подход (${nSets}→${nSets + 1}), вес тот же`, addSet: { from: nSets, to: nSets + 1 } };
+  }
+  if (minRIR >= targetRIR) {
     const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
-    text = `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})`;
-  } else if (topReps < item.repRangeMin) {
-    lever = 'reduce';
-    text = `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг`;
-  } else {
-    lever = 'hold';
-    text = `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}`;
+    return { lever: 'reps', text: `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})` };
   }
-
-  // объём — вторичный рычаг: только при запасе восстановления и не у потолка подходов
-  let volume = null;
-  if (failCount === 0 && minRIR >= targetRIR && nSets < cap && grow && (lever === 'reps' || lever === 'hold')) {
-    volume = `или прибавь 1 рабочий подход (${nSets}→${nSets + 1}) — прогресс объёмом`;
+  if (topReps < item.repRangeMin) {
+    return { lever: 'reduce', text: `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг` };
   }
-  return { lever, text, volume };
+  return { lever: 'hold', text: `было тяжелее цели (RIR ${minRIR} < ${targetRIR}) — повтори тот же вес, целься в RIR ${targetRIR}` };
 }
 
 /* ---------- мезоцикл ---------- */

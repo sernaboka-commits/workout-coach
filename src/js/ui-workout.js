@@ -330,13 +330,37 @@ function planDiff(rec, item, priorWorkSets) {
   return out;
 }
 
+/**
+ * Отложенное решение тренера по объёму (чистая функция): смотрит ПОСЛЕДНЮЮ
+ * завершённую сессию упражнения и возвращает, что нужно применить к
+ * программе, если «+1 подход» ещё не был применён (сессия завершена на
+ * старой версии, либо «Завершить» не нажимали).
+ * lastSession — запись exerciseHistory: { date, weekNo, isDeload, sets }.
+ * → { to, stamp } | null
+ */
+function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
+  if (!lastSession || lastSession.isDeload) return null;
+  const stamp = String(lastSession.date);
+  if (item.volAppliedAt === stamp) return null;             // уже применяли
+  const targetRIR = engine.targetRIRForWeek(lastSession.weekNo || 1, growWeeks || 5);
+  const adv = engine.nextSessionAdvice(lastSession.sets, item, targetRIR, {
+    weightStep: (exercise && exercise.weightStep) || 2.5,
+    growWeek: true,
+    bodyweight: !!(exercise && exercise.bodyweight),
+  });
+  if (!adv || adv.lever !== 'sets' || !adv.addSet) return null;
+  // применяем только если workSets не менялся с той сессии (ни нами, ни вручную)
+  if (item.workSets !== adv.addSet.from) return null;
+  return { to: adv.addSet.to, stamp };
+}
+
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
 
 function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
-  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice };
+  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -365,7 +389,28 @@ function initWorkout(root, opts = {}) {
     const today = new Date().toISOString().slice(0, 10);
     session = state.sessions.find((s) => s.dayId === day.id && String(s.date).slice(0, 10) === today) || null;
   }
+
+  /** Отложенные решения тренера по объёму: применяем при открытии экрана —
+   *  решения сессий, завершённых до обновления или без кнопки «Завершить». */
+  function applyPendingVolume() {
+    if (meso.isDeload) return;
+    let changed = false;
+    day.items.forEach((item, idx) => {
+      const last = S.exerciseHistory(state, item.exerciseId, { limit: 3 })
+        .filter((h) => !session || h.sessionId !== session.id)[0] || null;
+      const p = pendingVolumeAdd(item, last, meso.growWeeks, E, S.getExercise(state, item.exerciseId));
+      if (!p) return;
+      state = S.updateDayItem(state, day.id, idx, { workSets: p.to, volAppliedAt: p.stamp });
+      changed = true;
+    });
+    if (changed) {
+      day = state.program.days.find((d) => d.id === day.id) || day;
+      S.save(state); onCommit(state);
+    }
+  }
+
   resumeSession();
+  applyPendingVolume();
 
   function setDay(dayId) {
     const d = (allDays || []).find((x) => x.id === dayId);
@@ -374,6 +419,7 @@ function initWorkout(root, opts = {}) {
     stopRest(false); timer = null;
     for (const k of Object.keys(drafts)) delete drafts[k];
     resumeSession();
+    applyPendingVolume();
     render();
   }
 
@@ -726,8 +772,9 @@ function initWorkout(root, opts = {}) {
       (id) => S.getExercise(state, id), E, !meso.isDeload
     );
     if (!adds.length) return;
+    const stamp = String(liveSession().date || '');
     for (const a of adds) {
-      state = S.updateDayItem(state, day.id, a.idx, { workSets: a.to });
+      state = S.updateDayItem(state, day.id, a.idx, { workSets: a.to, volAppliedAt: stamp });
       volAdded[a.exerciseId] = { from: a.from, to: a.to };
     }
     day = state.program.days.find((d) => d.id === day.id) || day;
@@ -800,6 +847,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds, planDiff,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds, planDiff, pendingVolumeAdd,
   };
 }

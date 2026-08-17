@@ -292,7 +292,9 @@ function addDayItem(state, dayId, item) {
 }
 
 function updateDayItem(state, dayId, index, patch) {
-  const allowed = ['exerciseId', 'repRangeMin', 'repRangeMax', 'workSets', 'targetRIR', 'restSec'];
+  // volAppliedAt — дата сессии, решение тренера по объёму которой уже
+  // применено к workSets (защита от повторного автодобавления)
+  const allowed = ['exerciseId', 'repRangeMin', 'repRangeMax', 'workSets', 'targetRIR', 'restSec', 'volAppliedAt'];
   const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
   return mapDay(state, dayId, (d) => {
     if (index < 0 || index >= d.items.length) throw new Error('Нет элемента #' + index);

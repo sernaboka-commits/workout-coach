@@ -47,6 +47,11 @@ t('updateDayItem правит поле и фильтрует чужие', () => 
   const it = state.program.days.find((d) => d.id === dayA.id).items[0];
   assert(it.workSets === 4 && it.note === undefined, JSON.stringify(it));
 });
+t('updateDayItem принимает volAppliedAt (штамп автообъёма)', () => {
+  state = store.updateDayItem(state, dayA.id, 0, { volAppliedAt: '2026-08-15T10:00:00.000Z' });
+  const it = state.program.days.find((d) => d.id === dayA.id).items[0];
+  assert(it.volAppliedAt === '2026-08-15T10:00:00.000Z', JSON.stringify(it));
+});
 t('moveDayItem меняет порядок; за границей — без изменений', () => {
   state = store.addDayItem(state, dayA.id, prog.defaultItemFor(ex.getExercise(state, 'bb-curl')));
   let d = state.program.days.find((x) => x.id === dayA.id);

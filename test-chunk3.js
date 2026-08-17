@@ -211,6 +211,28 @@ t('bodyweight: чип только по повторам/подходам, ве�
   assert(d.length === 1 && d[0].kind === 'reps' && d[0].dir === 'up', JSON.stringify(d));
 });
 
+console.log('— pendingVolumeAdd: отложенные решения тренера по объёму —');
+const lastSes = (sets, o = {}) => ({ sessionId: 's1', date: '2026-08-15T10:00:00.000Z', weekNo: 2, isDeload: false, sets, ...o });
+t('прошлая сессия «заметно легче» и не применено → {to:4, stamp:дата}', () => {
+  const p = ui.pendingVolumeAdd(item({ workSets: 3 }), lastSes([S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)]), 5, eng, { weightStep: 2.5 });
+  assert(p && p.to === 4 && p.stamp === '2026-08-15T10:00:00.000Z', JSON.stringify(p));
+});
+t('штамп volAppliedAt совпадает с датой сессии → null (уже применяли)', () => {
+  const it = item({ workSets: 3 });
+  it.volAppliedAt = '2026-08-15T10:00:00.000Z';
+  assert(ui.pendingVolumeAdd(it, lastSes([S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)]), 5, eng, { weightStep: 2.5 }) === null);
+});
+t('запас ровно в цель (тренер выбрал повторы) → null', () => {
+  assert(ui.pendingVolumeAdd(item({ workSets: 3 }), lastSes([S(60, 9, 2), S(60, 9, 2), S(60, 9, 2)]), 5, eng, { weightStep: 2.5 }) === null);
+});
+t('workSets уже увеличен (вручную или ранее) → null', () => {
+  assert(ui.pendingVolumeAdd(item({ workSets: 4 }), lastSes([S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)]), 5, eng, { weightStep: 2.5 }) === null);
+});
+t('делоуд-сессия или отсутствие истории → null', () => {
+  assert(ui.pendingVolumeAdd(item(), lastSes([S(36, 8, 4)], { isDeload: true }), 5, eng, { weightStep: 2.5 }) === null);
+  assert(ui.pendingVolumeAdd(item(), null, 5, eng, { weightStep: 2.5 }) === null);
+});
+
 console.log('— sessionSummary: итог тренировки —');
 t('тоннаж = Σ вес×повт рабочих; калибровочные не в счёт; лучший подход', () => {
   const ses = { date: '2026-07-12', sets: [

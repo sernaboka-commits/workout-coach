@@ -182,6 +182,35 @@ t('перед делоудом (growWeek=false) → пусто', () => {
   assert(ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, false).length === 0);
 });
 
+console.log('— planDiff: решения тренера видны сегодня —');
+t('подходы 3→4 и цель повторов +1 → два чипа вверх', () => {
+  const prior = [S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)];
+  const d = ui.planDiff({ weight: 60, reps: 9 }, item({ workSets: 4 }), prior);
+  const sets = d.find((c) => c.kind === 'sets');
+  const reps = d.find((c) => c.kind === 'reps');
+  assert(sets && sets.dir === 'up' && /3→4/.test(sets.text) && /тренер/.test(sets.text), JSON.stringify(d));
+  assert(reps && reps.dir === 'up' && /цель 9/.test(reps.text), JSON.stringify(d));
+});
+t('прогрессия веса → чип «вес +2.5», повторы не сравниваем', () => {
+  const prior = [S(60, 10, 2), S(60, 10, 2), S(60, 10, 2)];
+  const d = ui.planDiff({ weight: 62.5, reps: 8 }, item({ workSets: 3 }), prior);
+  assert(d.length === 1 && d[0].kind === 'weight' && d[0].dir === 'up' && /\+2\.5/.test(d[0].text), JSON.stringify(d));
+});
+t('снижение веса → чип вниз', () => {
+  const prior = [S(60, 5, 0)];
+  const d = ui.planDiff({ weight: 57.5, reps: 8 }, item({ workSets: 1 }), prior);
+  assert(d.some((c) => c.kind === 'weight' && c.dir === 'down'), JSON.stringify(d));
+});
+t('прошлой сессии нет → пусто', () => {
+  assert(ui.planDiff({ weight: 60, reps: 8 }, item(), []).length === 0);
+  assert(ui.planDiff({ weight: 60, reps: 8 }, item(), [S(40, 15, 4, { isCalibration: true })]).length === 0);
+});
+t('bodyweight: чип только по повторам/подходам, веса нет', () => {
+  const prior = [S(0, 8, 2), S(0, 8, 2)];
+  const d = ui.planDiff({ weight: 0, reps: 9 }, item({ workSets: 2, repRangeMin: 6, repRangeMax: 12 }), prior);
+  assert(d.length === 1 && d[0].kind === 'reps' && d[0].dir === 'up', JSON.stringify(d));
+});
+
 console.log('— sessionSummary: итог тренировки —');
 t('тоннаж = Σ вес×повт рабочих; калибровочные не в счёт; лучший подход', () => {
   const ses = { date: '2026-07-12', sets: [

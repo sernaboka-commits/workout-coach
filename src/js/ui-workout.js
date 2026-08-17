@@ -291,6 +291,45 @@ function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek
   return out;
 }
 
+/**
+ * Что тренер изменил к сегодняшней тренировке относительно прошлой
+ * (чистая функция). rec — рекомендация первого подхода, item — элемент
+ * программы, priorWorkSets — рабочие сеты прошлой сессии упражнения.
+ * → [{ kind:'sets'|'weight'|'reps', dir:'up'|'down', text }]
+ */
+function planDiff(rec, item, priorWorkSets) {
+  const prior = (priorWorkSets || []).filter((s) => !s.isCalibration);
+  if (!prior.length || !rec) return [];
+  const out = [];
+
+  const doneLast = prior.length;
+  if (item.workSets > doneLast) {
+    out.push({ kind: 'sets', dir: 'up', text: `подходы ${doneLast}→${item.workSets} · решение тренера` });
+  } else if (item.workSets < doneLast) {
+    out.push({ kind: 'sets', dir: 'down', text: `подходов меньше: ${item.workSets}` });
+  }
+
+  const lastW = Math.max(...prior.map((s) => Number(s.weight)));
+  const bw = !(lastW > 0);
+  if (!bw && rec.weight != null) {
+    const d = +(Number(rec.weight) - lastW).toFixed(1);
+    if (d > 0) out.push({ kind: 'weight', dir: 'up', text: `вес +${d} кг` });
+    else if (d < 0) out.push({ kind: 'weight', dir: 'down', text: `вес ${d} кг` });
+  }
+
+  // повторы сравниваем, только если вес не поменялся (или свой вес)
+  const sameWeight = bw || (rec.weight != null && Number(rec.weight) === lastW);
+  if (sameWeight && rec.reps != null) {
+    const topReps = Math.max(...prior
+      .filter((s) => bw || Number(s.weight) === lastW)
+      .map((s) => Number(s.reps)));
+    const d = Number(rec.reps) - topReps;
+    if (d > 0) out.push({ kind: 'reps', dir: 'up', text: `повторы: цель ${rec.reps} (+${d})` });
+    else if (d < 0) out.push({ kind: 'reps', dir: 'down', text: `повторы: ${rec.reps} (спад — норма)` });
+  }
+  return out;
+}
+
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
 
 function initWorkout(root, opts = {}) {
@@ -452,8 +491,15 @@ function initWorkout(root, opts = {}) {
             <div>${guide.text}</div>
             ${skipBtn}
           </div>` : '';
+        // видимые решения тренера: что изменилось к сегодняшней тренировке
+        const priorWork = hist ? hist.sets.filter((s) => !s.isCalibration) : [];
+        const diffs = guide ? [] : planDiff(plan.rec, item, priorWork);
+        const diffHtml = diffs.length
+          ? `<div class="plan-diff">${diffs.map((c) => `<span class="pd ${c.dir}">${c.dir === 'up' ? '▲' : '▼'} ${c.text}</span>`).join('')}</div>`
+          : '';
         active = `
           ${guideHtml}
+          ${diffHtml}
           <div class="rec-line">${recVals}${!guide && plan.rec ? plan.rec.reason : ''}</div>
           <div class="entry" data-ex="${item.exerciseId}">
             ${weightField}
@@ -463,11 +509,14 @@ function initWorkout(root, opts = {}) {
           </div>`;
       }
 
+      // подходы увеличены тренером с прошлого раза → пометка даже у «готово»
+      const setsUp = hist && item.workSets > hist.sets.filter((s) => !s.isCalibration).length;
+      const setsMeta = setsUp ? `<b class="meta-up">${item.workSets} подх. ↑</b>` : `${item.workSets} подх.`;
       parts.push(`
         <section class="ex-card${plan.mode === 'done' ? ' complete' : ''}">
           <div class="ex-head">
             <div class="ex-name">${ex.name} ${badge}</div>
-            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${item.workSets} подх. · отдых ${fmtClock(item.restSec)}
+            <div class="ex-meta">${item.repRangeMin}–${item.repRangeMax} повт · ${setsMeta} · отдых ${fmtClock(item.restSec)}
               · <a class="vid-link" href="${videoUrl(ex)}" target="_blank" rel="noopener">🎬 видео</a></div>
           </div>
           ${prevLine}
@@ -751,6 +800,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds, planDiff,
   };
 }

@@ -163,7 +163,7 @@ function nextSessionAdvice(sets, item, targetRIR, opts = {}) {
   }
   if (minRIR >= targetRIR) {
     const goal = Math.max(item.repRangeMin, Math.min(topReps + 1, item.repRangeMax));
-    return { lever: 'reps', text: `тот же вес — добавь повтор (цель ${goal} при RIR ${targetRIR})` };
+    return { lever: 'reps', text: `ставлю цель +1 повтор: ${goal} при RIR ${targetRIR}, вес тот же` };
   }
   if (topReps < item.repRangeMin) {
     return { lever: 'reduce', text: `до отказа лишь ~${topReps + minRIR} повт — вес тяжеловат, −${step} кг` };

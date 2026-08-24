@@ -87,11 +87,22 @@ const weeklySessions = (exId, weights, { deloadLastWeek = false } = {}) =>
     return ses(iso, [set(exId, w, 5, 2)], { weekNo: (i % 6) + 1, isDeload: deloadLastWeek && i === weights.length - 1 });
   });
 
-t('плато 3+ недели → стагнация', () => {
+t('плато 3+ недели → стагнация (окно задано явно)', () => {
   const st = mkState(weeklySessions('bench', [60, 61, 62, 63, 63, 63, 63]));
   const r = an.stagnation(st, { minWeeks: 3 });
   const bench = r.find((x) => x.exerciseId === 'bench');
   assert(bench, 'ожидалась стагнация: ' + JSON.stringify(r));
+});
+t('дефолтное окно = полный цикл (growWeeks+1): 4 недели флэта — НЕ стагнация', () => {
+  // усталость внутри цикла маскирует форму — флагуем только дольше цикла
+  const st = mkState(weeklySessions('bench', [60, 61, 62, 63, 63, 63, 63]));
+  assert(an.stagnation(st).length === 0, 'внутрицикловой флэт не должен флаговаться');
+});
+t('дефолтное окно: флэт дольше полного цикла → стагнация', () => {
+  const st = mkState(weeklySessions('bench', [60, 61, 62, 63, 63, 63, 63, 63, 63, 63]));
+  const r = an.stagnation(st);
+  const bench = r.find((x) => x.exerciseId === 'bench');
+  assert(bench && bench.weeks === 6, 'ожидалась стагнация за 6 нед: ' + JSON.stringify(r));
 });
 t('стабильный рост → нет стагнации', () => {
   const st = mkState(weeklySessions('bench', [60, 61, 62, 63, 64, 65, 66]));

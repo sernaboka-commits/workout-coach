@@ -169,12 +169,19 @@ function muscleLoad(state, { now = new Date(), weekOffset = 0 } = {}) {
 /* ---------- детектор стагнации ---------- */
 
 /**
- * Упражнения без роста e1RM minWeeks+ недель (вне делоуда), с допуском.
+ * Настоящее плато: ноль личных рекордов e1RM за ПОЛНЫЙ мезоцикл и дольше
+ * (Helms/RP: внутри цикла усталость маскирует форму — флэт на тяжёлых
+ * неделях это норма, ПР часто приходят после делоуда; линейный рост «каждую
+ * тренировку» — только у новичков). Окно по умолчанию — growWeeks+1 недель.
  * Стагнация: пик e1RM за последние minWeeks недель не превысил пик
- * предыдущих недель более чем на tolerance (доля).
+ * предыдущих недель более чем на tolerance (доля). Делоуд и калибровки
+ * исключены.
  * → [{ exerciseId, name, weeks, priorPeak, recentPeak, hint }]
  */
-function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } = {}) {
+function stagnation(state, { minWeeks = null, tolerance = 0.01, now = new Date() } = {}) {
+  if (minWeeks == null) {
+    minWeeks = ((state.mesocycle && state.mesocycle.growWeeks) || 5) + 1;   // полный цикл
+  }
   const out = [];
   for (const ex of state.exercises) {
     const series = e1rmSeries(state, ex.id).filter((p) => !p.isCalibration && !p.isDeload);
@@ -201,7 +208,7 @@ function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } 
         weeks: minWeeks,
         priorPeak: +priorPeak.toFixed(1),
         recentPeak: +recentPeak.toFixed(1),
-        hint: `e1RM не растёт ${minWeeks}+ нед. Гипотеза (не директива): сменить вариацию, проверить объём/сон/питание.`,
+        hint: `Пик e1RM не растёт ${minWeeks}+ нед — дольше полного цикла, это уже похоже на настоящее плато (флэт ВНУТРИ цикла — норма: усталость маскирует форму, рекорды часто приходят после делоуда). Гипотезы: сменить вариацию упражнения, проверить сон/питание/стресс, срезать лишний объём.`,
       });
     }
   }

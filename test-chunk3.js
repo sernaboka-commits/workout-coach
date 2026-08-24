@@ -225,8 +225,16 @@ t('штамп volAppliedAt совпадает с датой сессии → nul
 t('запас ровно в цель (тренер выбрал повторы) → null', () => {
   assert(ui.pendingVolumeAdd(item({ workSets: 3 }), lastSes([S(60, 9, 2), S(60, 9, 2), S(60, 9, 2)]), 5, eng, { weightStep: 2.5 }) === null);
 });
-t('workSets уже увеличен (вручную или ранее) → null', () => {
+t('план недовыполнен (сделано 3 при workSets 4) → null', () => {
   assert(ui.pendingVolumeAdd(item({ workSets: 4 }), lastSes([S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)]), 5, eng, { weightStep: 2.5 }) === null);
+});
+t('сделал больше плана (4 из 3) легко → новый план 5 (от фактического)', () => {
+  const p = ui.pendingVolumeAdd(item({ workSets: 3 }), lastSes([S(60, 9, 3), S(60, 9, 3), S(60, 9, 3), S(60, 9, 4)]), 5, eng, { weightStep: 2.5 });
+  assert(p && p.to === 5, JSON.stringify(p));
+});
+t('кап 5 подходов → null', () => {
+  const five = [S(60, 9, 3), S(60, 9, 3), S(60, 9, 3), S(60, 9, 3), S(60, 9, 3)];
+  assert(ui.pendingVolumeAdd(item({ workSets: 5 }), lastSes(five), 5, eng, { weightStep: 2.5 }) === null);
 });
 t('делоуд-сессия или отсутствие истории → null', () => {
   assert(ui.pendingVolumeAdd(item(), lastSes([S(36, 8, 4)], { isDeload: true }), 5, eng, { weightStep: 2.5 }) === null);

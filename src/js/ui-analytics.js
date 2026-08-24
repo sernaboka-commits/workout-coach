@@ -207,7 +207,7 @@ function initAnalytics(root, opts = {}) {
         ${muscleLoadHtml()}
 
         <section class="an-card">
-          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b></div>
+          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b><small>за полный цикл — флэт внутри цикла это норма</small></div>
           ${stg.length
             ? stg.map((s) => `<div class="stag"><div class="stag-name">${s.name}</div><div class="stag-hint">${s.hint}</div></div>`).join('')
             : '<div class="pi-empty">Нет застоя — e1RM растёт по всем упражнениям с историей.</div>'}

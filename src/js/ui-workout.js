@@ -285,7 +285,9 @@ function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek
       weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight,
     });
     if (adv && adv.lever === 'sets' && adv.addSet) {
-      out.push({ exerciseId: item.exerciseId, idx, from: adv.addSet.from, to: adv.addSet.to });
+      // новый план — от фактически сделанного (могли быть сверхплановые), кап 5
+      const to = Math.min(5, Math.max(item.workSets, workDone) + 1);
+      if (to > item.workSets) out.push({ exerciseId: item.exerciseId, idx, from: item.workSets, to });
     }
   });
   return out;
@@ -342,6 +344,9 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
   if (!lastSession || lastSession.isDeload) return null;
   const stamp = String(lastSession.date);
   if (item.volAppliedAt === stamp) return null;             // уже применяли
+  if (item.workSets >= 5) return null;                      // кап объёма
+  const done = lastSession.sets.filter((s) => !s.isCalibration).length;
+  if (done < item.workSets) return null;                    // план был недовыполнен
   const targetRIR = engine.targetRIRForWeek(lastSession.weekNo || 1, growWeeks || 5);
   const adv = engine.nextSessionAdvice(lastSession.sets, item, targetRIR, {
     weightStep: (exercise && exercise.weightStep) || 2.5,
@@ -349,9 +354,8 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
     bodyweight: !!(exercise && exercise.bodyweight),
   });
   if (!adv || adv.lever !== 'sets' || !adv.addSet) return null;
-  // применяем только если workSets не менялся с той сессии (ни нами, ни вручную)
-  if (item.workSets !== adv.addSet.from) return null;
-  return { to: adv.addSet.to, stamp };
+  // сделал больше плана — новый план от фактического (сверхплановые подходы)
+  return { to: Math.min(5, Math.max(item.workSets, done) + 1), stamp };
 }
 
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
@@ -379,6 +383,7 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
+  const extraSets = {};    // exId -> n: «+ ещё подход» сверх плана (только сегодня)
   const volAdded = {};     // exId -> {from,to}: тренер добавил подход в программу
   let volApplied = false;  // автообъём применён (один раз за сессию)
   let timer = null;        // { endTs, restSec, handle }
@@ -485,7 +490,11 @@ function initWorkout(root, opts = {}) {
 
     for (const item of day.items) {
       const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
-      const plan = planFor(item);
+      // «+ ещё подход сегодня» расширяет план только этой сессии
+      const eff = extraSets[item.exerciseId]
+        ? { ...item, workSets: item.workSets + extraSets[item.exerciseId] }
+        : item;
+      const plan = planFor(eff);
       const logged = exSets(item.exerciseId);
       const badge = plan.mode === 'probe' || plan.mode === 'ramp' ? '<span class="badge cal">калибровка</span>'
         : plan.mode === 'cal-done' ? '<span class="badge ok">вес подобран</span>'
@@ -516,7 +525,7 @@ function initWorkout(root, opts = {}) {
             <div>${guide.text}</div>
           </div>`;
       } else if (plan.mode !== 'done') {
-        const d = ensureDraft(item, plan);
+        const d = ensureDraft(eff, plan);
         const bw = !!ex.bodyweight;
         const recVals = plan.rec && plan.rec.reps != null
           ? (bw
@@ -553,6 +562,9 @@ function initWorkout(root, opts = {}) {
             ${entryField(item.exerciseId, 'rir', 'RIR (в запасе)', d.rir, 'i', 1, 'numeric', 0, 5)}
             <button class="log-wide" data-act="log" data-ex="${item.exerciseId}">✓ Записать подход</button>
           </div>`;
+      } else if (plan.mode === 'done') {
+        // план выполнен, но есть силы/время — разовый сверхплановый подход
+        active = `<button class="btn ghost sm extra-set-btn" data-act="extra-set" data-ex="${item.exerciseId}">+ ещё подход сегодня</button>`;
       }
 
       // подходы увеличены тренером с прошлого раза → пометка даже у «готово»
@@ -699,6 +711,7 @@ function initWorkout(root, opts = {}) {
     if (act === 'rest-skip') { stopRest(); return; }
     if (act === 'undo') { removeSet(btn.dataset.set); return; }
     if (act === 'skip-cal') { skipCal[exId] = true; delete drafts[exId]; render(); return; }
+    if (act === 'extra-set') { extraSets[exId] = (extraSets[exId] || 0) + 1; delete drafts[exId]; render(); return; }
 
     const item = day.items.find((i) => i.exerciseId === exId);
     if (!item) return;

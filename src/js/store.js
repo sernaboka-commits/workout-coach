@@ -157,6 +157,7 @@ function startSession(state, dayId, { date = new Date().toISOString(), isDeload 
     date,
     dayId,
     weekNo: state.mesocycle.weekNo,
+    cycleNo: state.mesocycle.cycleNo,   // для сравнения прогресса цикл-к-циклу
     isDeload,
     sets: [],
     note: null,

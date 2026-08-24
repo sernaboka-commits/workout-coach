@@ -450,6 +450,7 @@ html, body {
 .cal-guide b { display: block; margin-bottom: 4px; }
 .cal-guide div { color: var(--muted); }
 .cal-skip { margin-top: 8px; }
+.extra-set-btn { margin-top: 8px; width: 100%; }
 
 /* --- плашка обновления --- */
 #upd-bar {
@@ -653,8 +654,8 @@ const HELP_TERMS = {
     short: 'Ориентир недельного объёма на группу мышц для роста: меньше ~10 рабочих подходов — стимула может не хватать, больше ~20 — риск не восстановиться. Это диапазон из исследований гипертрофии (Schoenfeld, Israetel), а не жёсткое правило: смотри на прогресс и самочувствие.',
   },
   stagnation: {
-    title: 'Стагнация',
-    short: 'Детектор застоя: если лучший e1RM упражнения не растёт 3+ недели (делоуд не в счёт), приложение подсвечивает его. Это гипотеза, а не приговор: чаще всего помогает смена вариации упражнения, проверка сна/питания или снижение лишнего объёма.',
+    title: 'Стагнация — настоящее плато',
+    short: 'Флэт внутри цикла — это НЕ стагнация: усталость накапливается и маскирует форму, просадка на тяжёлых неделях запланирована, а рекорды часто приходят после делоуда. Настоящее плато — ноль личных рекордов e1RM за полный мезоцикл и дольше; только тогда упражнение попадает в эту карточку. Что помогает: смена вариации, проверка сна/питания/стресса, снижение лишнего объёма.',
   },
 };
 
@@ -696,9 +697,14 @@ const HELP_TOPICS = [
     body: 'Объём (число рабочих подходов на группу мышц в неделю) — главный управляемый фактор роста. Ориентир: ~10 подходов — нижняя граница эффективной дозы, ~20 — верхняя (дальше обычно растёт усталость, а не мышцы). График «Объём за неделю» подсвечивает: жёлтый — маловато, красный — перебор. Это ориентиры из мета-анализов (Schoenfeld) и практики RP, а не догма: новичкам хватает меньшего, отстающим группам можно временно давать больше.',
   },
   {
+    id: 'progress-rate',
+    title: 'Как быстро должен расти прогресс',
+    body: 'Ожидать прибавку веса на каждой тренировке — ошибка (так растут только новички в первые месяцы). Дальше прогресс идёт волнами: цель +1 повтор в рекомендации — это цель ПРИ НАЛИЧИИ запаса, а не требование; если запаса нет, тренер честно скажет повторить прошлое. Внутри мезоцикла усталость накапливается и маскирует форму: на неделях с RIR 1 показатели могут стоять или даже проседать — это запланировано, а личные рекорды чаще всего случаются в начале следующего цикла, после делоуда. Правильное сравнение — не «сегодня против вчера», а «неделя 1 этого цикла против недели 1 прошлого» (для этого у тренировок хранится номер цикла). Тревожиться стоит, только если пик e1RM не растёт дольше полного цикла — тогда сработает карточка «Стагнация». Источники подхода: Eric Helms (Muscle & Strength Pyramid: линейная прогрессия — для новичков, дальше волновая), Renaissance Periodization (усталость маскирует форму, оценка блоками).',
+  },
+  {
     id: 'e1rm-stagnation',
     title: 'e1RM, прогресс и стагнация',
-    body: 'e1RM — расчётный разовый максимум по формуле Эпли (вес × (1 + повторы/30)), считается от лучшего подхода с поправкой на RIR. Его график — главный индикатор прогресса силы без опасных проходок на максимум. Если пик e1RM не растёт 3+ недели (делоуд исключается) — упражнение попадает в «Стагнацию». Что делать: чаще всего помогает смена вариации (например, жим штанги → жим гантелей), проверка сна/питания/стресса или снижение лишнего объёма. Это подсказка для размышления, а не команда.',
+    body: 'e1RM — расчётный разовый максимум по формуле Эпли (вес × (1 + повторы/30)), считается от лучшего подхода с поправкой на RIR. Его график — главный индикатор прогресса силы без опасных проходок на максимум. В «Стагнацию» упражнение попадает, только если пик e1RM не растёт дольше полного мезоцикла (делоуд исключается) — флэт внутри цикла нормален, см. статью «Как быстро должен расти прогресс». Что делать при настоящем плато: смена вариации (например, жим штанги → жим гантелей), проверка сна/питания/стресса, снижение лишнего объёма. Это подсказка для размышления, а не команда.',
   },
   {
     id: 'safety',
@@ -1050,6 +1056,7 @@ function startSession(state, dayId, { date = new Date().toISOString(), isDeload 
     date,
     dayId,
     weekNo: state.mesocycle.weekNo,
+    cycleNo: state.mesocycle.cycleNo,   // для сравнения прогресса цикл-к-циклу
     isDeload,
     sets: [],
     note: null,
@@ -1943,12 +1950,19 @@ function muscleLoad(state, { now = new Date(), weekOffset = 0 } = {}) {
 /* ---------- детектор стагнации ---------- */
 
 /**
- * Упражнения без роста e1RM minWeeks+ недель (вне делоуда), с допуском.
+ * Настоящее плато: ноль личных рекордов e1RM за ПОЛНЫЙ мезоцикл и дольше
+ * (Helms/RP: внутри цикла усталость маскирует форму — флэт на тяжёлых
+ * неделях это норма, ПР часто приходят после делоуда; линейный рост «каждую
+ * тренировку» — только у новичков). Окно по умолчанию — growWeeks+1 недель.
  * Стагнация: пик e1RM за последние minWeeks недель не превысил пик
- * предыдущих недель более чем на tolerance (доля).
+ * предыдущих недель более чем на tolerance (доля). Делоуд и калибровки
+ * исключены.
  * → [{ exerciseId, name, weeks, priorPeak, recentPeak, hint }]
  */
-function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } = {}) {
+function stagnation(state, { minWeeks = null, tolerance = 0.01, now = new Date() } = {}) {
+  if (minWeeks == null) {
+    minWeeks = ((state.mesocycle && state.mesocycle.growWeeks) || 5) + 1;   // полный цикл
+  }
   const out = [];
   for (const ex of state.exercises) {
     const series = e1rmSeries(state, ex.id).filter((p) => !p.isCalibration && !p.isDeload);
@@ -1975,7 +1989,7 @@ function stagnation(state, { minWeeks = 3, tolerance = 0.01, now = new Date() } 
         weeks: minWeeks,
         priorPeak: +priorPeak.toFixed(1),
         recentPeak: +recentPeak.toFixed(1),
-        hint: `e1RM не растёт ${minWeeks}+ нед. Гипотеза (не директива): сменить вариацию, проверить объём/сон/питание.`,
+        hint: `Пик e1RM не растёт ${minWeeks}+ нед — дольше полного цикла, это уже похоже на настоящее плато (флэт ВНУТРИ цикла — норма: усталость маскирует форму, рекорды часто приходят после делоуда). Гипотезы: сменить вариацию упражнения, проверить сон/питание/стресс, срезать лишний объём.`,
       });
     }
   }
@@ -2732,7 +2746,9 @@ function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek
       weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight,
     });
     if (adv && adv.lever === 'sets' && adv.addSet) {
-      out.push({ exerciseId: item.exerciseId, idx, from: adv.addSet.from, to: adv.addSet.to });
+      // новый план — от фактически сделанного (могли быть сверхплановые), кап 5
+      const to = Math.min(5, Math.max(item.workSets, workDone) + 1);
+      if (to > item.workSets) out.push({ exerciseId: item.exerciseId, idx, from: item.workSets, to });
     }
   });
   return out;
@@ -2789,6 +2805,9 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
   if (!lastSession || lastSession.isDeload) return null;
   const stamp = String(lastSession.date);
   if (item.volAppliedAt === stamp) return null;             // уже применяли
+  if (item.workSets >= 5) return null;                      // кап объёма
+  const done = lastSession.sets.filter((s) => !s.isCalibration).length;
+  if (done < item.workSets) return null;                    // план был недовыполнен
   const targetRIR = engine.targetRIRForWeek(lastSession.weekNo || 1, growWeeks || 5);
   const adv = engine.nextSessionAdvice(lastSession.sets, item, targetRIR, {
     weightStep: (exercise && exercise.weightStep) || 2.5,
@@ -2796,9 +2815,8 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
     bodyweight: !!(exercise && exercise.bodyweight),
   });
   if (!adv || adv.lever !== 'sets' || !adv.addSet) return null;
-  // применяем только если workSets не менялся с той сессии (ни нами, ни вручную)
-  if (item.workSets !== adv.addSet.from) return null;
-  return { to: adv.addSet.to, stamp };
+  // сделал больше плана — новый план от фактического (сверхплановые подходы)
+  return { to: Math.min(5, Math.max(item.workSets, done) + 1), stamp };
 }
 
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
@@ -2826,6 +2844,7 @@ function initWorkout(root, opts = {}) {
   let session = null;      // ленивая: создаётся при первом залоге
   const drafts = {};       // exId -> { weight, reps, rir, mode }
   const skipCal = {};      // exId -> true: пользователь пропустил подбор веса
+  const extraSets = {};    // exId -> n: «+ ещё подход» сверх плана (только сегодня)
   const volAdded = {};     // exId -> {from,to}: тренер добавил подход в программу
   let volApplied = false;  // автообъём применён (один раз за сессию)
   let timer = null;        // { endTs, restSec, handle }
@@ -2932,7 +2951,11 @@ function initWorkout(root, opts = {}) {
 
     for (const item of day.items) {
       const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
-      const plan = planFor(item);
+      // «+ ещё подход сегодня» расширяет план только этой сессии
+      const eff = extraSets[item.exerciseId]
+        ? { ...item, workSets: item.workSets + extraSets[item.exerciseId] }
+        : item;
+      const plan = planFor(eff);
       const logged = exSets(item.exerciseId);
       const badge = plan.mode === 'probe' || plan.mode === 'ramp' ? '<span class="badge cal">калибровка</span>'
         : plan.mode === 'cal-done' ? '<span class="badge ok">вес подобран</span>'
@@ -2963,7 +2986,7 @@ function initWorkout(root, opts = {}) {
             <div>${guide.text}</div>
           </div>`;
       } else if (plan.mode !== 'done') {
-        const d = ensureDraft(item, plan);
+        const d = ensureDraft(eff, plan);
         const bw = !!ex.bodyweight;
         const recVals = plan.rec && plan.rec.reps != null
           ? (bw
@@ -3000,6 +3023,9 @@ function initWorkout(root, opts = {}) {
             ${entryField(item.exerciseId, 'rir', 'RIR (в запасе)', d.rir, 'i', 1, 'numeric', 0, 5)}
             <button class="log-wide" data-act="log" data-ex="${item.exerciseId}">✓ Записать подход</button>
           </div>`;
+      } else if (plan.mode === 'done') {
+        // план выполнен, но есть силы/время — разовый сверхплановый подход
+        active = `<button class="btn ghost sm extra-set-btn" data-act="extra-set" data-ex="${item.exerciseId}">+ ещё подход сегодня</button>`;
       }
 
       // подходы увеличены тренером с прошлого раза → пометка даже у «готово»
@@ -3146,6 +3172,7 @@ function initWorkout(root, opts = {}) {
     if (act === 'rest-skip') { stopRest(); return; }
     if (act === 'undo') { removeSet(btn.dataset.set); return; }
     if (act === 'skip-cal') { skipCal[exId] = true; delete drafts[exId]; render(); return; }
+    if (act === 'extra-set') { extraSets[exId] = (extraSets[exId] || 0) + 1; delete drafts[exId]; render(); return; }
 
     const item = day.items.find((i) => i.exerciseId === exId);
     if (!item) return;
@@ -3966,7 +3993,7 @@ function initAnalytics(root, opts = {}) {
         ${muscleLoadHtml()}
 
         <section class="an-card">
-          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b></div>
+          <div class="an-head"><b>Стагнация ${hint('stagnation')}</b><small>за полный цикл — флэт внутри цикла это норма</small></div>
           ${stg.length
             ? stg.map((s) => `<div class="stag"><div class="stag-name">${s.name}</div><div class="stag-hint">${s.hint}</div></div>`).join('')
             : '<div class="pi-empty">Нет застоя — e1RM растёт по всем упражнениям с историей.</div>'}

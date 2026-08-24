@@ -74,6 +74,7 @@ console.log('— store: сессия и подходы —');
 let session;
 ({ state, session } = store.startSession(state, 'day-a'));
 t('startSession создаёт сессию с weekNo из мезоцикла', () => assert(session.weekNo === 1 && state.sessions.length === 1));
+t('startSession пишет cycleNo (сравнение прогресса цикл-к-циклу)', () => assert(session.cycleNo === 1));
 
 let set;
 ({ state, set } = store.logSet(state, session.id, { exerciseId: 'bb-bench-press', setNo: 1, weight: 60, reps: 10, rir: 2 }));

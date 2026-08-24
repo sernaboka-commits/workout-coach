@@ -2760,14 +2760,21 @@ function autoVolumeAdds(day, sessionSets, targetRIR, resolveEx, engine, growWeek
  * программы, priorWorkSets — рабочие сеты прошлой сессии упражнения.
  * → [{ kind:'sets'|'weight'|'reps', dir:'up'|'down', text }]
  */
-function planDiff(rec, item, priorWorkSets) {
+function planDiff(rec, item, priorWorkSets, { coachAdded = false } = {}) {
   const prior = (priorWorkSets || []).filter((s) => !s.isCalibration);
   if (!prior.length || !rec) return [];
   const out = [];
 
   const doneLast = prior.length;
   if (item.workSets > doneLast) {
-    out.push({ kind: 'sets', dir: 'up', text: `подходы ${doneLast}→${item.workSets} · решение тренера` });
+    // «решение тренера» — только если план реально увеличен тренером;
+    // иначе прошлый план был просто недовыполнен
+    out.push({
+      kind: 'sets', dir: 'up',
+      text: coachAdded
+        ? `подходы ${doneLast}→${item.workSets} · решение тренера`
+        : `сегодня ${item.workSets} подх. (в прошлый раз сделан${doneLast === 1 ? '' : 'о'} ${doneLast})`,
+    });
   } else if (item.workSets < doneLast) {
     out.push({ kind: 'sets', dir: 'down', text: `подходов меньше: ${item.workSets}` });
   }
@@ -3009,7 +3016,8 @@ function initWorkout(root, opts = {}) {
           </div>` : '';
         // видимые решения тренера: что изменилось к сегодняшней тренировке
         const priorWork = hist ? hist.sets.filter((s) => !s.isCalibration) : [];
-        const diffs = guide ? [] : planDiff(plan.rec, item, priorWork);
+        const coachAdded = !!(hist && item.volAppliedAt === String(hist.date));
+        const diffs = guide ? [] : planDiff(plan.rec, item, priorWork, { coachAdded });
         const diffHtml = diffs.length
           ? `<div class="plan-diff">${diffs.map((c) => `<span class="pd ${c.dir}">${c.dir === 'up' ? '▲' : '▼'} ${c.text}</span>`).join('')}</div>`
           : '';

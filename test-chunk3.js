@@ -183,13 +183,19 @@ t('перед делоудом (growWeek=false) → пусто', () => {
 });
 
 console.log('— planDiff: решения тренера видны сегодня —');
-t('подходы 3→4 и цель повторов +1 → два чипа вверх', () => {
+t('тренер добавил подход (coachAdded) → чип «3→4 · решение тренера»', () => {
   const prior = [S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)];
-  const d = ui.planDiff({ weight: 60, reps: 9 }, item({ workSets: 4 }), prior);
+  const d = ui.planDiff({ weight: 60, reps: 9 }, item({ workSets: 4 }), prior, { coachAdded: true });
   const sets = d.find((c) => c.kind === 'sets');
   const reps = d.find((c) => c.kind === 'reps');
   assert(sets && sets.dir === 'up' && /3→4/.test(sets.text) && /тренер/.test(sets.text), JSON.stringify(d));
   assert(reps && reps.dir === 'up' && /цель 9/.test(reps.text), JSON.stringify(d));
+});
+t('план был недовыполнен (1 из 3) → честный текст, БЕЗ «решение тренера»', () => {
+  const prior = [S(77.5, 6, 2)];
+  const d = ui.planDiff({ weight: 77.5, reps: 7 }, item({ workSets: 3 }), prior);
+  const sets = d.find((c) => c.kind === 'sets');
+  assert(sets && !/тренер/.test(sets.text) && /сделан 1/.test(sets.text), JSON.stringify(d));
 });
 t('прогрессия веса → чип «вес +2.5», повторы не сравниваем', () => {
   const prior = [S(60, 10, 2), S(60, 10, 2), S(60, 10, 2)];

@@ -75,6 +75,18 @@ let session;
 ({ state, session } = store.startSession(state, 'day-a'));
 t('startSession создаёт сессию с weekNo из мезоцикла', () => assert(session.weekNo === 1 && state.sessions.length === 1));
 t('startSession пишет cycleNo (сравнение прогресса цикл-к-циклу)', () => assert(session.cycleNo === 1));
+t('finishSession фиксирует сессию, unfinishSession снимает фиксацию', () => {
+  assert(session.finishedAt === null, 'новая сессия не завершена');
+  state = store.finishSession(state, session.id, { now: new Date('2026-08-24T19:00:00Z') });
+  let s = state.sessions.find((x) => x.id === session.id);
+  assert(s.finishedAt === '2026-08-24T19:00:00.000Z', JSON.stringify(s.finishedAt));
+  state = store.unfinishSession(state, session.id);
+  s = state.sessions.find((x) => x.id === session.id);
+  assert(s.finishedAt === null);
+  let threw = false;
+  try { store.finishSession(state, 'nope'); } catch (_) { threw = true; }
+  assert(threw, 'ожидалась ошибка на чужой id');
+});
 
 let set;
 ({ state, set } = store.logSet(state, session.id, { exerciseId: 'bb-bench-press', setNo: 1, weight: 60, reps: 10, rir: 2 }));

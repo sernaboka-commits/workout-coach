@@ -161,8 +161,30 @@ function startSession(state, dayId, { date = new Date().toISOString(), isDeload 
     isDeload,
     sets: [],
     note: null,
+    finishedAt: null,                   // «Завершить тренировку» фиксирует сессию
   };
   return { state: { ...state, sessions: [...state.sessions, session] }, session };
+}
+
+/** Завершить тренировку: фиксирует сессию — UI блокирует изменения,
+ *  случайные тапы больше не добавляют «фантомные» подходы. */
+function finishSession(state, sessionId, { now = new Date() } = {}) {
+  let found = false;
+  const sessions = state.sessions.map((s) => {
+    if (s.id !== sessionId) return s;
+    found = true;
+    return { ...s, finishedAt: now.toISOString() };
+  });
+  if (!found) throw new Error('Сессия не найдена: ' + sessionId);
+  return { ...state, sessions };
+}
+
+/** Снять фиксацию (осознанное «Возобновить тренировку»). */
+function unfinishSession(state, sessionId) {
+  const sessions = state.sessions.map((s) =>
+    s.id === sessionId ? { ...s, finishedAt: null } : s
+  );
+  return { ...state, sessions };
 }
 
 function logSet(state, sessionId, setInput) {
@@ -400,7 +422,7 @@ if (typeof module !== 'undefined') {
     STORAGE_KEY, SCHEMA_VERSION,
     defaultState, load, save, validateState, mergeLibrary,
     exportBackup, importBackup, backupOverdue,
-    startSession, logSet, updateSet, deleteSet,
+    startSession, finishSession, unfinishSession, logSet, updateSet, deleteSet,
     exerciseHistory, genId,
     nextDayLabel, addDay, updateDay, deleteDay,
     addDayItem, updateDayItem, removeDayItem, moveDayItem,

@@ -369,7 +369,7 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
 
 function initWorkout(root, opts = {}) {
   const S = opts.store || {
-    startSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
+    startSession, finishSession, unfinishSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
   const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek };
   const onCommit = opts.onCommit || function () {};
@@ -450,6 +450,11 @@ function initWorkout(root, opts = {}) {
   function exSets(exId) {
     return liveSession().sets.filter((s) => s.exerciseId === exId);
   }
+  /** Сессия завершена кнопкой «Завершить» — изменения заблокированы. */
+  function isLocked() {
+    const ses = liveSession();
+    return !!ses.finishedAt;
+  }
   function ctxFor(item) {
     return E.context(state, item.exerciseId, item, S.exerciseHistory);
   }
@@ -474,6 +479,7 @@ function initWorkout(root, opts = {}) {
   /* --- рендер --- */
   function render() {
     const prog = dayProgress(day, liveSession().sets);
+    const locked = isLocked();
     const parts = [];
 
     // переключатель дней (если их больше одного); сегодняшний помечается
@@ -495,6 +501,17 @@ function initWorkout(root, opts = {}) {
         <div class="wk-prog">${prog.done}/${prog.total}</div>
       </header>`);
 
+    if (locked) {
+      parts.push(`
+        <div class="lock-bar">
+          <b>Тренировка завершена ✓</b> — изменения заблокированы, случайные нажатия ничего не запишут.
+          <div class="lock-actions">
+            <button class="btn sm" data-act="show-summary">Итог</button>
+            <button class="btn ghost sm" data-act="resume-session">Возобновить</button>
+          </div>
+        </div>`);
+    }
+
     for (const item of day.items) {
       const ex = S.getExercise(state, item.exerciseId) || { name: item.exerciseId, weightStep: 2.5 };
       // «+ ещё подход сегодня» расширяет план только этой сессии
@@ -512,7 +529,7 @@ function initWorkout(root, opts = {}) {
         <div class="set-row done">
           <span class="set-no">${s.isCalibration ? 'кал.' : '#' + (++workNo)}</span>
           <span class="set-res">${s.weight > 0 ? s.weight + ' кг × ' + s.reps : s.reps + ' повт'}${s.rir != null ? ' · RIR ' + s.rir : ''}</span>
-          <button class="mini" data-act="undo" data-set="${s.id}">✕</button>
+          ${locked ? '' : `<button class="mini" data-act="undo" data-set="${s.id}">✕</button>`}
         </div>`).join('');
 
       // прошлая сессия по этому упражнению (без калибровочных)
@@ -523,7 +540,9 @@ function initWorkout(root, opts = {}) {
         : '';
 
       let active = '';
-      if (plan.mode === 'cal-done') {
+      if (locked) {
+        // завершённая тренировка: только просмотр, никаких форм и кнопок
+      } else if (plan.mode === 'cal-done') {
         // лесенка завершена: показываем итог, без формы ввода
         const guide = calibrationGuide(plan, item);
         active = `
@@ -591,7 +610,7 @@ function initWorkout(root, opts = {}) {
         </section>`);
     }
 
-    if (liveSession().sets.length) {
+    if (!locked && liveSession().sets.length) {
       parts.push(`<button class="btn finish-btn" data-act="finish">🏁 Завершить тренировку</button>`);
     }
 
@@ -701,7 +720,26 @@ function initWorkout(root, opts = {}) {
 
     unlockAudio();   // любой тап на экране разблокирует звук таймера (iOS)
 
-    if (act === 'finish') { applyAutoVolume(); showSummary = true; render(); return; }
+    if (act === 'finish') {
+      applyAutoVolume();
+      // фиксация: после «Завершить» сессия заблокирована от случайных изменений
+      if (session) {
+        state = S.finishSession(state, session.id);
+        S.save(state); onCommit(state);
+      }
+      showSummary = true; render(); return;
+    }
+    if (act === 'show-summary') { showSummary = true; render(); return; }
+    if (act === 'resume-session') {
+      const ok = (typeof confirm === 'function') ? confirm('Возобновить завершённую тренировку? Снова можно будет записывать и удалять подходы.') : true;
+      if (ok && session) {
+        state = S.unfinishSession(state, session.id);
+        S.save(state); onCommit(state);
+      }
+      render(); return;
+    }
+    // завершённая сессия: никакие изменяющие действия не проходят
+    if (isLocked() && ['log', 'undo', 'extra-set', 'skip-cal', 'vol-undo', 'w-', 'w+', 'r-', 'r+', 'i-', 'i+'].includes(act)) return;
     if (act === 'vol-undo') {
       const v = volAdded[exId];
       const idx = day.items.findIndex((i) => i.exerciseId === exId);

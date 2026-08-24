@@ -436,6 +436,15 @@ html, body {
 .cal-skip { margin-top: 8px; }
 .extra-set-btn { margin-top: 8px; width: 100%; }
 
+/* --- завершённая тренировка: фиксация от случайных нажатий --- */
+.lock-bar {
+  background: rgba(55,196,106,.1); border: 1px solid var(--ok);
+  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px;
+  font-size: 13.5px; color: var(--muted);
+}
+.lock-bar b { color: var(--ok); }
+.lock-actions { display: flex; gap: 8px; margin-top: 10px; }
+
 /* --- плашка обновления --- */
 #upd-bar {
   position: fixed; left: 12px; right: 12px; bottom: 76px; z-index: 60;

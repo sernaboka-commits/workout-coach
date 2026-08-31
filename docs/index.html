@@ -640,7 +640,7 @@ const HELP_TERMS = {
   },
   deload: {
     title: 'Делоуд — разгрузочная неделя',
-    short: 'Неделя восстановления после 5 недель роста: 60% рабочего веса, половина подходов, RIR 4 (очень легко). Мышцы и суставы восстанавливаются, накопленная усталость уходит — следующий цикл начинаешь свежим и сильнее. Пропускать не стоит: без разгрузки прогресс упирается в усталость.',
+    short: 'Неделя восстановления после 5 недель роста: 60% рабочего веса, половина подходов, RIR 4 (очень легко). Когда наступит — видно прямо в шапке тренировки («делоуд через N нед.»): недели переключаются сами по календарю, пропущенные недели цикл не двигают. Мышцы и суставы восстанавливаются, усталость уходит — следующий цикл начинаешь свежим, и именно после делоуда чаще всего случаются рекорды. Пропускать не стоит.',
   },
   'double-progression': {
     title: 'Прогрессия: тренер решает сам',
@@ -693,7 +693,7 @@ const HELP_TOPICS = [
   {
     id: 'meso',
     title: 'Мезоцикл и делоуд',
-    body: 'Тренировки идут циклами: 5 недель роста + 1 неделя делоуда. Внутри цикла усилие нарастает через целевой RIR (от «легко» RIR 3 к «почти предел» RIR 1). Делоуд — 60% рабочего веса и половина подходов при RIR 4: это не потерянная неделя, а часть плана — суставы, связки и нервная система восстанавливаются, и следующий цикл начинается с новых сил. Неделя завершается вручную кнопкой «Завершить неделю» в настройках; делоуд можно сдвинуть на ±1 неделю, если чувствуешь себя бодро или наоборот.',
+    body: 'Тренировки идут циклами: 5 недель роста + 1 неделя делоуда. Внутри цикла усилие нарастает через целевой RIR (от «легко» RIR 3 к «почти предел» RIR 1). Делоуд — 60% рабочего веса и половина подходов при RIR 4: это не потерянная неделя, а часть плана — суставы, связки и нервная система восстанавливаются, и следующий цикл начинается с новых сил. Недели переключаются автоматически по календарю: неделя, в которой были тренировки, засчитывается в понедельник следующей; пропущенные недели (отпуск, болезнь) цикл не двигают. Сколько осталось до делоуда — видно в шапке тренировки и в настройках. Кнопка «Завершить неделю» в настройках — ручной обгон, а «Делоуд раньше/позже» сдвигает его на ±1 неделю по самочувствию.',
   },
   {
     id: 'muscles',
@@ -1540,6 +1540,54 @@ function advanceWeek(state, { now = new Date() } = {}) {
   return { ...state, mesocycle: { ...m, weekNo: m.weekNo + 1 } };
 }
 
+/* ---------- автопереход недель по календарю ---------- */
+
+/** Понедельник недели даты, UTC (та же логика, что в analytics). */
+function mondayOfUTC(d) {
+  const x = new Date(d);
+  const day = (x.getUTCDay() + 6) % 7;
+  x.setUTCHours(0, 0, 0, 0);
+  x.setUTCDate(x.getUTCDate() - day);
+  return x;
+}
+
+/**
+ * Недели мезоцикла тикают сами по календарю: каждая ПРОШЕДШАЯ календарная
+ * неделя, в которой были силовые тренировки, продвигает weekNo (+делоуд и
+ * новый цикл через advanceWeek); пустые недели (пропуск/отпуск) цикл не
+ * двигают. Первый вызов только ставит якорь на текущую неделю — история
+ * задним числом не прокручивается. Ручная кнопка «Завершить неделю»
+ * остаётся как переопределение.
+ */
+function syncWeekWithCalendar(state, { now = new Date() } = {}) {
+  const cur = mondayOfUTC(now);
+  let s = state;
+  if (!s.mesocycle.weekAnchor) {
+    return { ...s, mesocycle: { ...s.mesocycle, weekAnchor: cur.toISOString() } };
+  }
+  let anchor = mondayOfUTC(new Date(s.mesocycle.weekAnchor));
+  while (anchor < cur) {
+    const next = new Date(anchor);
+    next.setUTCDate(next.getUTCDate() + 7);
+    const trained = (s.sessions || []).some((ses) => {
+      const ms = new Date(ses.date).getTime();
+      return ms >= anchor.getTime() && ms < next.getTime() && (ses.sets || []).length > 0;
+    });
+    if (trained) s = advanceWeek(s, { now });
+    s = { ...s, mesocycle: { ...s.mesocycle, weekAnchor: next.toISOString() } };
+    anchor = next;
+  }
+  return s;
+}
+
+/** Обратный отсчёт до делоуда для шапки тренировки (чистая функция). */
+function deloadCountdown(meso) {
+  if (meso.isDeload) return 'делоуд: 60% веса, половина подходов';
+  const left = meso.deloadWeek - meso.weekNo;
+  if (left <= 1) return 'делоуд со следующей недели';
+  return `делоуд через ${left} нед.`;
+}
+
 /** Ручной сдвиг делоуда ±1 неделя (риск из PRD). Клампится к [-1, +1]. */
 function shiftDeload(state, delta) {
   const cur = state.mesocycle.deloadShift || 0;
@@ -1801,6 +1849,9 @@ if (typeof module !== 'undefined') {
     mesoStatus,
     advanceWeek,
     shiftDeload,
+    mondayOfUTC,
+    syncWeekWithCalendar,
+    deloadCountdown,
     context,
     calibrate,
     weightFromLadder,
@@ -2863,7 +2914,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, finishSession, unfinishSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
-  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek };
+  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek, deloadCountdown };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -2988,7 +3039,7 @@ function initWorkout(root, opts = {}) {
       <header class="wk-head">
         <div>
           <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД ' + _hint('deload') : ''}</div>
-          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')}</div>
+          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')} · ${E.deloadCountdown ? E.deloadCountdown(meso) : ''} ${_hint('deload')}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
       </header>`);
@@ -4576,6 +4627,11 @@ function initApp() {
   // вместо этого экран «Программа» показывает мастер создания
   let state = load(EXERCISE_LIBRARY);
 
+  // недели мезоцикла тикают сами по календарю (пустые недели не в счёт);
+  // кнопка «Завершить неделю» в настройках остаётся ручным обгоном
+  state = syncWeekWithCalendar(state);
+  save(state);
+
   // экраны сообщают об изменениях сюда — держим один объект state
   const onCommit = (next) => { state = next; };
 
@@ -4639,7 +4695,7 @@ function initApp() {
             <button class="btn ghost sm" data-act="deload-earlier">Делоуд раньше</button>
             <button class="btn ghost sm" data-act="deload-later">Делоуд позже</button>
           </div>
-          <div class="meso-hint">Делоуд на неделе ${m.deloadWeek}${m.deloadShift ? ` (сдвиг ${m.deloadShift > 0 ? '+' : ''}${m.deloadShift})` : ''}. Сдвиг ±1 — риск из PRD.</div>
+          <div class="meso-hint"><b>${deloadCountdown(m)}</b> · делоуд на неделе ${m.deloadWeek}${m.deloadShift ? ` (сдвиг ${m.deloadShift > 0 ? '+' : ''}${m.deloadShift})` : ''}. Недели переключаются сами: календарная неделя с тренировками засчитывается в понедельник следующей, пропущенные недели цикл не двигают. «Завершить неделю» — ручной обгон.</div>
         </section>
 
         <section class="an-card">
@@ -4681,7 +4737,15 @@ function initApp() {
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
       const act = btn.dataset.act;
-      if (act === 'adv-week') { state = advanceWeek(state); save(state); renderSettings(root); }
+      if (act === 'adv-week') {
+        state = advanceWeek(state);
+        // ручной обгон «съедает» текущую календарную неделю, чтобы
+        // автопереход не продвинул её второй раз
+        const nm = mondayOfUTC(new Date());
+        nm.setUTCDate(nm.getUTCDate() + 7);
+        state = { ...state, mesocycle: { ...state.mesocycle, weekAnchor: nm.toISOString() } };
+        save(state); renderSettings(root);
+      }
       else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
       else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }
       else if (act === 'export') { doExport(root); }

@@ -197,6 +197,54 @@ function advanceWeek(state, { now = new Date() } = {}) {
   return { ...state, mesocycle: { ...m, weekNo: m.weekNo + 1 } };
 }
 
+/* ---------- автопереход недель по календарю ---------- */
+
+/** Понедельник недели даты, UTC (та же логика, что в analytics). */
+function mondayOfUTC(d) {
+  const x = new Date(d);
+  const day = (x.getUTCDay() + 6) % 7;
+  x.setUTCHours(0, 0, 0, 0);
+  x.setUTCDate(x.getUTCDate() - day);
+  return x;
+}
+
+/**
+ * Недели мезоцикла тикают сами по календарю: каждая ПРОШЕДШАЯ календарная
+ * неделя, в которой были силовые тренировки, продвигает weekNo (+делоуд и
+ * новый цикл через advanceWeek); пустые недели (пропуск/отпуск) цикл не
+ * двигают. Первый вызов только ставит якорь на текущую неделю — история
+ * задним числом не прокручивается. Ручная кнопка «Завершить неделю»
+ * остаётся как переопределение.
+ */
+function syncWeekWithCalendar(state, { now = new Date() } = {}) {
+  const cur = mondayOfUTC(now);
+  let s = state;
+  if (!s.mesocycle.weekAnchor) {
+    return { ...s, mesocycle: { ...s.mesocycle, weekAnchor: cur.toISOString() } };
+  }
+  let anchor = mondayOfUTC(new Date(s.mesocycle.weekAnchor));
+  while (anchor < cur) {
+    const next = new Date(anchor);
+    next.setUTCDate(next.getUTCDate() + 7);
+    const trained = (s.sessions || []).some((ses) => {
+      const ms = new Date(ses.date).getTime();
+      return ms >= anchor.getTime() && ms < next.getTime() && (ses.sets || []).length > 0;
+    });
+    if (trained) s = advanceWeek(s, { now });
+    s = { ...s, mesocycle: { ...s.mesocycle, weekAnchor: next.toISOString() } };
+    anchor = next;
+  }
+  return s;
+}
+
+/** Обратный отсчёт до делоуда для шапки тренировки (чистая функция). */
+function deloadCountdown(meso) {
+  if (meso.isDeload) return 'делоуд: 60% веса, половина подходов';
+  const left = meso.deloadWeek - meso.weekNo;
+  if (left <= 1) return 'делоуд со следующей недели';
+  return `делоуд через ${left} нед.`;
+}
+
 /** Ручной сдвиг делоуда ±1 неделя (риск из PRD). Клампится к [-1, +1]. */
 function shiftDeload(state, delta) {
   const cur = state.mesocycle.deloadShift || 0;
@@ -458,6 +506,9 @@ if (typeof module !== 'undefined') {
     mesoStatus,
     advanceWeek,
     shiftDeload,
+    mondayOfUTC,
+    syncWeekWithCalendar,
+    deloadCountdown,
     context,
     calibrate,
     weightFromLadder,

@@ -371,7 +371,7 @@ function initWorkout(root, opts = {}) {
   const S = opts.store || {
     startSession, finishSession, unfinishSession, logSet, save, getExercise, exerciseHistory, updateDayItem,
   };
-  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek };
+  const E = opts.engine || { recommend, calibrate, weightFromLadder, adjustLoadWithinSession, mesoStatus, context, projectReps, nextSessionAdvice, targetRIRForWeek, deloadCountdown };
   const onCommit = opts.onCommit || function () {};
 
   let state = opts.state;
@@ -496,7 +496,7 @@ function initWorkout(root, opts = {}) {
       <header class="wk-head">
         <div>
           <div class="wk-title">День ${day.label}${wd} · Неделя ${meso.weekNo}${meso.isDeload ? ' · ДЕЛОУД ' + _hint('deload') : ''}</div>
-          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')}</div>
+          <div class="wk-sub">Цель недели: RIR ${meso.targetRIR} ${_hint('rir')} · ${E.deloadCountdown ? E.deloadCountdown(meso) : ''} ${_hint('deload')}</div>
         </div>
         <div class="wk-prog">${prog.done}/${prog.total}</div>
       </header>`);

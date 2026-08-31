@@ -187,6 +187,43 @@ t('делоуд → 60% рабочего веса', () => {
   assert(r.isDeload === true && r.weight === 60 && r.targetRIR === 4, JSON.stringify(r));
 });
 
+console.log('— syncWeekWithCalendar: недели тикают сами по календарю —');
+const NOWM = new Date('2026-08-24T10:00:00Z');   // понедельник
+const st0 = (weekAnchor, sessions = []) => ({
+  mesocycle: { cycleNo: 1, weekNo: 2, growWeeks: 5, deloadShift: 0, ...(weekAnchor ? { weekAnchor } : {}) },
+  sessions,
+});
+const trainedOn = (iso) => ({ date: iso + 'T18:00:00.000Z', sets: [{ id: 'x' }] });
+t('первый вызов только ставит якорь, неделю не двигает', () => {
+  const s = eng.syncWeekWithCalendar(st0(null), { now: NOWM });
+  assert(s.mesocycle.weekNo === 2 && s.mesocycle.weekAnchor === '2026-08-24T00:00:00.000Z', JSON.stringify(s.mesocycle));
+});
+t('прошла неделя с тренировками → weekNo +1, якорь сдвинут', () => {
+  const s = eng.syncWeekWithCalendar(st0('2026-08-17T00:00:00.000Z', [trainedOn('2026-08-19')]), { now: NOWM });
+  assert(s.mesocycle.weekNo === 3 && s.mesocycle.weekAnchor === '2026-08-24T00:00:00.000Z', JSON.stringify(s.mesocycle));
+});
+t('пустая неделя (отпуск) цикл не двигает, якорь сдвигается', () => {
+  const s = eng.syncWeekWithCalendar(st0('2026-08-17T00:00:00.000Z', []), { now: NOWM });
+  assert(s.mesocycle.weekNo === 2 && s.mesocycle.weekAnchor === '2026-08-24T00:00:00.000Z', JSON.stringify(s.mesocycle));
+});
+t('две прошедших недели: одна с тренировками, одна пустая → +1', () => {
+  const s = eng.syncWeekWithCalendar(st0('2026-08-10T00:00:00.000Z', [trainedOn('2026-08-12')]), { now: NOWM });
+  assert(s.mesocycle.weekNo === 3, JSON.stringify(s.mesocycle));
+});
+t('прошедшая делоуд-неделя (weekNo 6) с тренировками → новый цикл', () => {
+  const base = st0('2026-08-17T00:00:00.000Z', [trainedOn('2026-08-19')]);
+  base.mesocycle.weekNo = 6;
+  const s = eng.syncWeekWithCalendar(base, { now: NOWM });
+  assert(s.mesocycle.weekNo === 1 && s.mesocycle.cycleNo === 2, JSON.stringify(s.mesocycle));
+});
+
+console.log('— deloadCountdown: отсчёт до делоуда —');
+t('нед.2 из 6 → «через 4 нед.»; нед.5 → «со следующей недели»; делоуд → 60%', () => {
+  assert(/через 4 нед/.test(eng.deloadCountdown({ weekNo: 2, deloadWeek: 6, isDeload: false })));
+  assert(/следующей недели/.test(eng.deloadCountdown({ weekNo: 5, deloadWeek: 6, isDeload: false })));
+  assert(/60%/.test(eng.deloadCountdown({ weekNo: 6, deloadWeek: 6, isDeload: true })));
+});
+
 console.log('— weightFromLadder: рабочий вес из калибровочной лесенки —');
 t('опора — самая тяжёлая прикидка в диапазоне, проекция на середину', () => {
   // диапазон 8–12: опора 40×8@2 (rtf 10, e1RM 53.3) → 53.3/(1+13/30)=37.2 → 37.5

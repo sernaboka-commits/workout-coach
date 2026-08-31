@@ -11,6 +11,11 @@ function initApp() {
   // вместо этого экран «Программа» показывает мастер создания
   let state = load(EXERCISE_LIBRARY);
 
+  // недели мезоцикла тикают сами по календарю (пустые недели не в счёт);
+  // кнопка «Завершить неделю» в настройках остаётся ручным обгоном
+  state = syncWeekWithCalendar(state);
+  save(state);
+
   // экраны сообщают об изменениях сюда — держим один объект state
   const onCommit = (next) => { state = next; };
 
@@ -74,7 +79,7 @@ function initApp() {
             <button class="btn ghost sm" data-act="deload-earlier">Делоуд раньше</button>
             <button class="btn ghost sm" data-act="deload-later">Делоуд позже</button>
           </div>
-          <div class="meso-hint">Делоуд на неделе ${m.deloadWeek}${m.deloadShift ? ` (сдвиг ${m.deloadShift > 0 ? '+' : ''}${m.deloadShift})` : ''}. Сдвиг ±1 — риск из PRD.</div>
+          <div class="meso-hint"><b>${deloadCountdown(m)}</b> · делоуд на неделе ${m.deloadWeek}${m.deloadShift ? ` (сдвиг ${m.deloadShift > 0 ? '+' : ''}${m.deloadShift})` : ''}. Недели переключаются сами: календарная неделя с тренировками засчитывается в понедельник следующей, пропущенные недели цикл не двигают. «Завершить неделю» — ручной обгон.</div>
         </section>
 
         <section class="an-card">
@@ -116,7 +121,15 @@ function initApp() {
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
       const act = btn.dataset.act;
-      if (act === 'adv-week') { state = advanceWeek(state); save(state); renderSettings(root); }
+      if (act === 'adv-week') {
+        state = advanceWeek(state);
+        // ручной обгон «съедает» текущую календарную неделю, чтобы
+        // автопереход не продвинул её второй раз
+        const nm = mondayOfUTC(new Date());
+        nm.setUTCDate(nm.getUTCDate() + 7);
+        state = { ...state, mesocycle: { ...state.mesocycle, weekAnchor: nm.toISOString() } };
+        save(state); renderSettings(root);
+      }
       else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
       else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }
       else if (act === 'export') { doExport(root); }

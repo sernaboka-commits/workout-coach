@@ -75,7 +75,8 @@ function initApp() {
             <div class="meso-badge">Цель RIR ${m.targetRIR}</div>
           </div>
           <div class="meso-actions">
-            <button class="btn" data-act="adv-week">Завершить неделю →</button>
+            ${m.isDeload ? '' : '<button class="btn" data-act="deload-now">🛌 Начать делоуд сейчас</button>'}
+            <button class="btn ghost sm" data-act="adv-week">Завершить неделю →</button>
             <button class="btn ghost sm" data-act="deload-earlier">Делоуд раньше</button>
             <button class="btn ghost sm" data-act="deload-later">Делоуд позже</button>
           </div>
@@ -129,6 +130,12 @@ function initApp() {
         nm.setUTCDate(nm.getUTCDate() + 7);
         state = { ...state, mesocycle: { ...state.mesocycle, weekAnchor: nm.toISOString() } };
         save(state); renderSettings(root);
+      }
+      else if (act === 'deload-now') {
+        // реактивная разгрузка (RP): усталость накопилась раньше плана
+        if (confirm('Начать разгрузочную неделю сейчас? Рекомендации станут 60% рабочего веса и половина подходов (RIR 4), после этой недели начнётся новый цикл.')) {
+          state = startDeloadNow(state); save(state); renderSettings(root);
+        }
       }
       else if (act === 'deload-earlier') { state = shiftDeload(state, -1); save(state); renderSettings(root); }
       else if (act === 'deload-later') { state = shiftDeload(state, +1); save(state); renderSettings(root); }

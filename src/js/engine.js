@@ -245,6 +245,20 @@ function deloadCountdown(meso) {
   return `делоуд через ${left} нед.`;
 }
 
+/**
+ * Начать делоуд немедленно (реактивная разгрузка по усталости — RP):
+ * неделя мезоцикла прыгает на делоудную, якорь ставится на текущую
+ * календарную неделю; по её окончании автопереход начнёт новый цикл.
+ */
+function startDeloadNow(state, { now = new Date() } = {}) {
+  const m = state.mesocycle;
+  const deloadWeek = (m.growWeeks || 5) + 1 + (m.deloadShift || 0);
+  return {
+    ...state,
+    mesocycle: { ...m, weekNo: deloadWeek, weekAnchor: mondayOfUTC(now).toISOString() },
+  };
+}
+
 /** Ручной сдвиг делоуда ±1 неделя (риск из PRD). Клампится к [-1, +1]. */
 function shiftDeload(state, delta) {
   const cur = state.mesocycle.deloadShift || 0;
@@ -509,6 +523,7 @@ if (typeof module !== 'undefined') {
     mondayOfUTC,
     syncWeekWithCalendar,
     deloadCountdown,
+    startDeloadNow,
     context,
     calibrate,
     weightFromLadder,

@@ -224,6 +224,28 @@ t('нед.2 из 6 → «через 4 нед.»; нед.5 → «со следу�
   assert(/60%/.test(eng.deloadCountdown({ weekNo: 6, deloadWeek: 6, isDeload: true })));
 });
 
+console.log('— startDeloadNow: реактивная разгрузка одной кнопкой —');
+t('нед.2 → сразу делоудная неделя, RIR 4, якорь на текущий понедельник', () => {
+  const st = { ...meso(2), sessions: [] };
+  const s = eng.startDeloadNow(st, { now: new Date('2026-08-27T10:00:00Z') });   // чт
+  const m = eng.mesoStatus(s);
+  assert(m.isDeload === true && m.targetRIR === 4 && s.mesocycle.weekNo === 6, JSON.stringify(s.mesocycle));
+  assert(s.mesocycle.weekAnchor === '2026-08-24T00:00:00.000Z', s.mesocycle.weekAnchor);
+});
+t('со сдвигом deloadShift +1 → делоудная неделя 7', () => {
+  const st = { ...meso(2, { deloadShift: 1 }), sessions: [] };
+  const s = eng.startDeloadNow(st, { now: new Date('2026-08-27T10:00:00Z') });
+  assert(s.mesocycle.weekNo === 7 && eng.mesoStatus(s).isDeload, JSON.stringify(s.mesocycle));
+});
+t('после делоуд-недели с тренировками sync начинает новый цикл', () => {
+  let st = { ...meso(2), sessions: [] };
+  st = eng.startDeloadNow(st, { now: new Date('2026-08-27T10:00:00Z') });
+  st = { ...st, sessions: [{ date: '2026-08-28T10:00:00.000Z', sets: [{ id: 'x' }] }] };
+  const s = eng.syncWeekWithCalendar(st, { now: new Date('2026-09-01T10:00:00Z') });   // след. неделя
+  const m = eng.mesoStatus(s);
+  assert(m.cycleNo === 2 && m.weekNo === 1 && !m.isDeload, JSON.stringify(s.mesocycle));
+});
+
 console.log('— weightFromLadder: рабочий вес из калибровочной лесенки —');
 t('опора — самая тяжёлая прикидка в диапазоне, проекция на середину', () => {
   // диапазон 8–12: опора 40×8@2 (rtf 10, e1RM 53.3) → 53.3/(1+13/30)=37.2 → 37.5

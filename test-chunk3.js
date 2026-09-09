@@ -182,6 +182,25 @@ t('перед делоудом (growWeek=false) → пусто', () => {
   assert(ui.autoVolumeAdds(dayOf(3), sets, 2, resolveEx, eng, false).length === 0);
 });
 
+console.log('— priorDisplaySession: «прошлый раз» без делоуда —');
+t('делоудная сессия пропускается, берётся обычная, флаг skippedDeload', () => {
+  const history = [
+    { sessionId: 'd', date: '2026-09-07', isDeload: true, sets: [S(36, 8, 4)] },
+    { sessionId: 'n', date: '2026-08-31', isDeload: false, sets: [S(60, 8, 2)] },
+  ];
+  const p = ui.priorDisplaySession(history, []);
+  assert(p.session && p.session.sessionId === 'n' && p.skippedDeload === true, JSON.stringify(p));
+});
+t('текущая сессия исключается; только делоуды в истории → null', () => {
+  const cur = [S(60, 8, 2, { id: 'cur1' })];
+  const history = [
+    { sessionId: 'c', date: '2026-09-09', isDeload: false, sets: [{ ...cur[0] }] },
+    { sessionId: 'd', date: '2026-09-07', isDeload: true, sets: [S(36, 8, 4)] },
+  ];
+  const p = ui.priorDisplaySession(history, cur);
+  assert(p.session === null && p.skippedDeload === true, JSON.stringify(p));
+});
+
 console.log('— planDiff: решения тренера видны сегодня —');
 t('тренер добавил подход (coachAdded) → чип «3→4 · решение тренера»', () => {
   const prior = [S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)];

@@ -365,6 +365,22 @@ function pendingVolumeAdd(item, lastSession, growWeeks, engine, exercise) {
   return { to: Math.min(5, Math.max(item.workSets, done) + 1), stamp };
 }
 
+/**
+ * «Прошлый раз» для карточки упражнения (чистая функция): первая сессия
+ * истории, которая НЕ делоуд и не содержит сеты текущей сессии — сравнение
+ * и чипы решений тренера не должны опираться на делоудные 60%-веса.
+ * → { session: запись exerciseHistory | null, skippedDeload: boolean }
+ */
+function priorDisplaySession(history, currentSets) {
+  let skippedDeload = false;
+  for (const h of history || []) {
+    if (h.sets.some((s) => (currentSets || []).some((x) => x.id === s.id))) continue;
+    if (h.isDeload) { skippedDeload = true; continue; }
+    return { session: h, skippedDeload };
+  }
+  return { session: null, skippedDeload };
+}
+
 /* ---------- DOM: монтирование экрана (браузер) ---------- */
 
 function initWorkout(root, opts = {}) {
@@ -532,11 +548,12 @@ function initWorkout(root, opts = {}) {
           ${locked ? '' : `<button class="mini" data-act="undo" data-set="${s.id}">✕</button>`}
         </div>`).join('');
 
-      // прошлая сессия по этому упражнению (без калибровочных)
-      const hist = S.exerciseHistory(state, item.exerciseId, { limit: 2 })
-        .filter((h) => !h.sets.some((s) => logged.some((l) => l.id === s.id)))[0];
+      // прошлая сессия по этому упражнению: без калибровочных и БЕЗ делоуда —
+      // сравнение и чипы не должны опираться на разгрузочные 60%-веса
+      const pd = priorDisplaySession(S.exerciseHistory(state, item.exerciseId, { limit: 5 }), logged);
+      const hist = pd.session;
       const prevLine = hist
-        ? `<div class="prev-line">Прошлый раз (${String(hist.date).slice(0, 10)}): ${setsText(hist.sets)}</div>`
+        ? `<div class="prev-line">Прошлый раз (${String(hist.date).slice(0, 10)}): ${setsText(hist.sets)}${pd.skippedDeload ? ' <small>· делоуд пропущен</small>' : ''}</div>`
         : '';
 
       let active = '';
@@ -631,6 +648,13 @@ function initWorkout(root, opts = {}) {
       const item = day.items.find((i) => i.exerciseId === e.exerciseId);
       const ex = S.getExercise(state, e.exerciseId) || { weightStep: 2.5 };
       const exSetsList = ses.sets.filter((s) => s.exerciseId === e.exerciseId);
+      // после делоудной тренировки советы от 60%-весов не считаем вовсе
+      if (ses.isDeload) {
+        return `<div class="sum-ex">
+          <div class="sum-row"><span>${e.name}</span><small>${e.sets} подх${e.top ? (e.top.weight > 0 ? ` · лучший ${e.top.weight}×${e.top.reps}` : ` · лучший ${e.top.reps} повт`) : ''}</small></div>
+          <div class="sum-advice lv-hold">Разгрузка выполнена ✓ — обычные рекомендации вернутся в новом цикле</div>
+        </div>`;
+      }
       const adv = item ? E.nextSessionAdvice(exSetsList, item, meso.targetRIR, { weightStep: ex.weightStep, growWeek, bodyweight: !!ex.bodyweight }) : null;
       // автообъём уже применён в applyAutoVolume — показываем факт + отмену
       const v = volAdded[e.exerciseId];
@@ -906,6 +930,6 @@ function buzz() {
 if (typeof module !== 'undefined') {
   module.exports = {
     demoDayA, fmtClock, computeRemaining, clampStep, dayProgress, planExercise, initWorkout,
-    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds, planDiff, pendingVolumeAdd,
+    WEEKDAYS, todayIdx, pickDayForDate, setsText, sessionSummary, calibrationGuide, autoVolumeAdds, planDiff, pendingVolumeAdd, priorDisplaySession,
   };
 }

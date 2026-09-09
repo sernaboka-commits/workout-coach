@@ -113,6 +113,15 @@ t('целевой RIR берётся из недели мезоцикла (не�
   assert(r.targetRIR === 1, JSON.stringify(r));
 });
 
+t('делоудные веса не влияют: [делоуд 36, обычная 60] → рекомендация от 60', () => {
+  const history = [
+    sess([S(36, 8, 4)], { date: '2026-09-07', isDeload: true, weekNo: 6 }),   // новее, но делоуд
+    sess([S(60, 8, 2), S(60, 8, 2), S(60, 8, 2)], { date: '2026-08-31' }),
+  ];
+  const r = eng.recommend('x', 1, { meso: eng.mesoStatus(meso(2)), item: item(), exercise: ex, history });
+  assert(r.weight === 60 && r.reps === 9, JSON.stringify(r));   // прогрессия от 60, не от 36
+});
+
 console.log('— recommend: RIR-aware вес —');
 t('РЕАЛЬНЫЙ КЕЙС: 9 повт при RIR 2, цель нед.1 RIR 3 → 8 повт (а не 10!)', () => {
   const history = [sess([S(50, 9, 2)])];

@@ -48,6 +48,17 @@ t('сессия только с калибровкой → точка помеч
   assert(s.length === 1 && s[0].isCalibration === true, JSON.stringify(s));
 });
 
+t('делоуд не попадает в динамику e1RM (разгрузка — не замер силы)', () => {
+  const st = mkState([
+    ses('2026-01-05', [set('bench', 60, 8, 2)]),
+    ses('2026-01-12', [set('bench', 36, 8, 4)], { isDeload: true, weekNo: 6 }),
+    ses('2026-01-19', [set('bench', 62.5, 8, 2)]),
+  ]);
+  const s = an.e1rmSeries(st, 'bench');
+  assert(s.length === 2, 'len=' + s.length);
+  assert(s.every((p) => p.e1rm > 70), JSON.stringify(s));   // делоудной точки 36 кг нет
+});
+
 console.log('— weeklyVolume —');
 t('считает рабочие сеты по primaryMuscle за неделю; калибровки не в счёт', () => {
   const st = mkState([

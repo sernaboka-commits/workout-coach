@@ -49,8 +49,10 @@ function bestE1rm(sets) {
 }
 
 /**
- * Ряд e1RM по сессиям (по возрастанию даты).
- * Точка: { date, weekNo, isDeload, e1rm, isCalibration }.
+ * Ряд e1RM по сессиям (по возрастанию даты) — БЕЗ делоудов: разгрузка
+ * (60% веса, RIR 4) — плановая часть цикла, а не замер силы, и в динамику
+ * одноповторного максимума не попадает.
+ * Точка: { date, weekNo, e1rm, isCalibration }.
  * Для тренда берём лучший рабочий сет; если в сессии были только
  * калибровочные — точка помечается isCalibration.
  */
@@ -58,6 +60,7 @@ function e1rmSeries(state, exerciseId) {
   const sessions = [...state.sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
   const out = [];
   for (const ses of sessions) {
+    if (ses.isDeload) continue;
     const all = ses.sets.filter((s) => s.exerciseId === exerciseId);
     if (!all.length) continue;
     const work = all.filter((s) => !s.isCalibration);
@@ -66,7 +69,6 @@ function e1rmSeries(state, exerciseId) {
     out.push({
       date: ses.date,
       weekNo: ses.weekNo,
-      isDeload: !!ses.isDeload,
       e1rm: +best.toFixed(1),
       isCalibration: isCal,
     });
@@ -184,7 +186,7 @@ function stagnation(state, { minWeeks = null, tolerance = 0.01, now = new Date()
   }
   const out = [];
   for (const ex of state.exercises) {
-    const series = e1rmSeries(state, ex.id).filter((p) => !p.isCalibration && !p.isDeload);
+    const series = e1rmSeries(state, ex.id).filter((p) => !p.isCalibration);   // делоуд исключён в e1rmSeries
     if (series.length < 2) continue;
 
     // максимум e1RM по неделям, по возрастанию

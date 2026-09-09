@@ -191,7 +191,7 @@ function initAnalytics(root, opts = {}) {
 
         <section class="an-card">
           <div class="an-head">
-            <b>Динамика e1RM ${hint('e1rm')}</b>
+            <b>Динамика e1RM ${hint('e1rm')}<br><small>без делоуда и калибровок</small></b>
             <select class="sel" id="an-ex">
               ${exs.map((e) => `<option value="${e.id}"${e.id === selEx ? ' selected' : ''}>${e.name}</option>`).join('') || '<option>нет данных</option>'}
             </select>
